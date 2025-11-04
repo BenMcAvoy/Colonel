@@ -1,0 +1,62 @@
+;
+; colonel.inf
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System ; TODO: specify appropriate Class
+ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318} ; TODO: specify appropriate ClassGuid
+Provider    = %ManufacturerName%
+CatalogFile = colonel.cat
+DriverVer   = ; TODO: set DriverVer in stampinf property pages
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+colonel.sys = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName% = Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
+
+[Standard.NT$ARCH$.10.0...16299]
+%colonel.DeviceDesc% = colonel_Device, Root\colonel ; TODO: edit hw-id
+
+[colonel_Device.NT]
+CopyFiles = File_Copy
+
+[File_Copy]
+colonel.sys
+
+;-------------- Service installation
+[colonel_Device.NT.Services]
+AddService = colonel,%SPSVCINST_ASSOCSERVICE%, colonel_Service_Inst
+
+; -------------- colonel driver install sections
+[colonel_Service_Inst]
+DisplayName    = %colonel.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\colonel.sys
+
+[colonel_Device.NT.Wdf]
+KmdfService = colonel, colonel_wdfsect
+
+[colonel_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE = 0x00000002
+ManufacturerName = "<Your manufacturer name>" ;TODO: Replace with your manufacturer name
+DiskName = "colonel Installation Disk"
+colonel.DeviceDesc = "colonel Device"
+colonel.SVCDESC = "colonel Service"
