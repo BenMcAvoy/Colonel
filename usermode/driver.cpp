@@ -21,17 +21,47 @@ DriverManager::DriverManager(std::string_view driverName)
 	}
 }
 
-DriverStatus DriverManager::attachToProcess(std::string_view procName, uintptr_t* outBaseAddress) {
-	// Kernel will enumerate the process by name; send the name only
-	std::wstring wideName(procName.begin(), procName.end());
+DWORD DriverManager::getPIDByName(std::string_view procName, uintptr_t* outBaseAddress) {
+	auto snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (snap == INVALID_HANDLE_VALUE) {
+		return 0;
+	}
+
+	PROCESSENTRY32 pe32{};
+	pe32.dwSize = sizeof(PROCESSENTRY32);
+	if (Process32First(snap, &pe32)) {
+		do {
+			std::wstring wProcName(procName.begin(), procName.end());
+			if (wProcName == pe32.szExeFile) {
+				if (outBaseAddress) {
+					auto modSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pe32.th32ProcessID);
+					if (modSnap != INVALID_HANDLE_VALUE) {
+						MODULEENTRY32 me32{};
+						me32.dwSize = sizeof(MODULEENTRY32);
+						if (Module32First(modSnap, &me32)) {
+							*outBaseAddress = reinterpret_cast<uintptr_t>(me32.modBaseAddr);
+						}
+						CloseHandle(modSnap);
+					}
+				}
+				CloseHandle(snap);
+				return pe32.th32ProcessID;
+			}
+		} while (Process32Next(snap, &pe32));
+	}
+
+	return 0;
+}
+
+DriverStatus DriverManager::attachToProcess(std::string_view procName, uintptr_t* outBaseAddress) const {
+	DWORD pid = getPIDByName(procName, outBaseAddress);
 
 	Info_t info{};
-	wcsncpy_s(info.processName, wideName.c_str(), MAX_NAME_LEN - 1);
+	info.targetPID = static_cast<UINT64>(pid);
 	info.targetAddress = 0;
 	info.bufferAddress = 0;
 	info.bytesToRead = 0;
 	info.bytesRead = 0;
-	info.baseAddress = 0;
 
 	DWORD bytesReturned = 0;
 	BOOL result = DeviceIoControl(
@@ -49,10 +79,6 @@ DriverStatus DriverManager::attachToProcess(std::string_view procName, uintptr_t
 		DWORD error = GetLastError();
 		throw DriverException(DriverStatus::FailedToAttach,
 			std::format("DeviceIoControl INITCODE failed with error: {} (0x{:X})", error, error));
-	}
-
-	if (outBaseAddress) {
-		*outBaseAddress = static_cast<uintptr_t>(info.baseAddress);
 	}
 
 	return DriverStatus::Success;

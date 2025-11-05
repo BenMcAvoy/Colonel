@@ -1,4 +1,3 @@
-#include "utils.h"
 #include "driver.h"
 
 using namespace Driver;
@@ -121,25 +120,13 @@ NTSTATUS Driver::HandleInitRequest(Info_t* buffer) {
 		return STATUS_INVALID_PARAMETER;
 	}
 
-	PEPROCESS process = nullptr;
-	PVOID baseAddress = nullptr;
-	NTSTATUS getProcessStatus = GetProcessByName(buffer->processName, &process, &baseAddress);
+	NTSTATUS getProcessStatus = PsLookupProcessByProcessId(buffer->processId, &Driver::targetProcess);
 
 	if (!NT_SUCCESS(getProcessStatus)) {
 		LOG("ERROR: GetProcessByName failed with status 0x%X", getProcessStatus);
+		Driver::targetProcess = nullptr;
 		return getProcessStatus;
 	}
-
-	if (!process) {
-		LOG("ERROR: Target process not found: %ws", buffer->processName);
-		return STATUS_NOT_FOUND;
-	}
-
-	LOG("Attached to process: %ws", buffer->processName);
-
-	// Save data
-	Driver::targetProcess = process;
-	buffer->baseAddress = baseAddress;
 
 	return STATUS_SUCCESS;
 }

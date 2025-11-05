@@ -1,4 +1,3 @@
-#include "utils.h"
 #include "driver.h"
 
 extern "C" NTSTATUS DriverEntry(

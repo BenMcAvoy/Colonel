@@ -55,12 +55,11 @@ class DriverManager {
 private:
 	static inline constexpr size_t MAX_NAME_LEN = 256;
 	struct Info_t {
-		_In_    WCHAR  processName[MAX_NAME_LEN]; // used by INIT
+		_In_    UINT64 targetPID;
 		_In_    UINT64 targetAddress;
 		_Inout_ UINT64 bufferAddress;
 		_In_    UINT64 bytesToRead;
 		_Out_   UINT64 bytesRead;
-		_Out_   UINT64 baseAddress;              // returned by INIT (optional)
 	};
 
 public:
@@ -77,7 +76,8 @@ public:
 	bool isValid() const { return hDriver_ != nullptr; }
 	DWORD getTargetPID() const { return targetPID_; }
 
-	DriverStatus attachToProcess(std::string_view procName, uintptr_t* outBaseAddress = nullptr);
+	static DWORD getPIDByName(std::string_view procName, uintptr_t* outBaseAddress = nullptr);
+	DriverStatus attachToProcess(std::string_view procName, uintptr_t* outBaseAddress = nullptr) const;
 
 	template <typename T, Addressable U>
 	T read(U address, DriverStatus* outStatus = nullptr) {
@@ -170,27 +170,11 @@ public:
 		return DriverStatus::Success;
 	}
 	
-	void shutdown() {
-		if (hDriver_) {
-			DeviceIoControl(
-				hDriver_,
-				SHUTDOWNCODE,
-				NULL,
-				0,
-				NULL,
-				0,
-				NULL,
-				NULL
-			);
-		}
-	}
-
 private:
 	HANDLE hDriver_;
 	DWORD targetPID_;
 
-	static inline constexpr DWORD INITCODE     = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x775, METHOD_BUFFERED, FILE_SPECIAL_ACCESS);
-	static inline constexpr DWORD SHUTDOWNCODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x776, METHOD_BUFFERED, FILE_SPECIAL_ACCESS);
-	static inline constexpr DWORD READCODE     = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUFFERED, FILE_SPECIAL_ACCESS);
-	static inline constexpr DWORD WRITECODE    = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x778, METHOD_BUFFERED, FILE_SPECIAL_ACCESS);
+	static inline constexpr ULONG INITCODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x775, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // attach
+	static inline constexpr ULONG READCODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x776, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // read
+	static inline constexpr ULONG WRITECODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // write
 };
