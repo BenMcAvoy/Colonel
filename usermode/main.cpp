@@ -11,15 +11,14 @@ int main(void) {
 		uintptr_t baseAddress = 0;
 		dm.attachToProcess("notepad.exe", &baseAddress);
 
-		if (!dm.isValid()) {
-			std::fprintf(stderr, "Failed to initialize driver manager.\n");
-			return -1;
-		}
+		std::println("Base address of notepad.exe: 0x{:X}", baseAddress);
 
-		printf("Attached to notepad.exe at base address: 0x%p\n", reinterpret_cast<void*>(baseAddress));
+		int16_t mz = dm.read<int16_t>(baseAddress);
+		char pe[3] = {};
+		memcpy(pe, &mz, sizeof(mz));
+		pe[2] = '\0';
 
-		uint16_t data = dm.read<uint16_t>(baseAddress);
-		printf("%c%c\n", data & 0xFF, (data >> 8) & 0xFF);
+		std::println("MZ Signature: {}", pe);
 
 		return 0;
 	}
