@@ -12,8 +12,8 @@ extern "C" NTSTATUS DriverEntry(
 
 	KFNs::Initialize();
 
-	LOG("Driver object @ %p", DriverObject);
-
+	// Create a real driver object, this one is manually mapped and not real
+	// (DriverObject is just 0x0 in this case, so we need to create a proper one)
 	auto driverName = INIT_USTRING(L"\\Driver\\colonelDriver");
 	auto res = KFNs::pIoCreateDriver(&driverName, &Driver::MainEntryPoint);
 

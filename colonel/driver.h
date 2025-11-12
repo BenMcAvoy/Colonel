@@ -1,7 +1,5 @@
 #pragma once
 
-#define COLONEL_DEBUG
-
 #include <ntifs.h>
 #include <ntddk.h>
 #include <ntstrsafe.h>
@@ -11,8 +9,16 @@
 
 #include "helpers.h"
 
+/// Define to enable debug logging
+/// If undefined, logging calls will not be included in the build
+#define COLONEL_DEBUG
+
 extern "C" NTSTATUS NTAPI IoCreateDriver(PUNICODE_STRING DriverName, PDRIVER_INITIALIZE InitializationFunction);
 
+/**
+ * Namespace to hold cached kernel function pointers.
+ * These can be initialized using `KFNs::Initialize()` and used throughout the driver code.
+*/
 namespace KFNs {
 	inline decltype(&IoCreateDevice) pIoCreateDevice = nullptr;
 	inline decltype(&IoCreateSymbolicLink) pIoCreateSymbolicLink = nullptr;
@@ -26,6 +32,10 @@ namespace KFNs {
 	inline decltype(&DbgPrintEx) pDbgPrintEx = nullptr;
 	inline decltype(&RtlInitUnicodeString) pRtlInitUnicodeString = nullptr;
 
+	/**
+	 * Initializes the cached kernel function pointers.
+	 * Call once at passive level during driver initialization.
+	*/
 	void Initialize();
 }
 
@@ -37,22 +47,11 @@ namespace KFNs {
 #define LOG(fmt, ...)
 #endif
 
-#define MAX_NAME_LEN 256
+union VirtualAddress;
 
-union VirtualAddress {
-	UINT64 value; // full 64-bit virtual address
-
-	struct {
-		UINT64 offset : 12; // page offset (4 KB pages)
-		UINT64 pt_index : 9;  // Page Table
-		UINT64 pd_index : 9;  // Page Directory
-		UINT64 pdpt_index : 9;  // Page Directory Pointer Table
-		UINT64 pml4_index : 9;  // PML4
-		UINT64 reserved : 16; // Sign-extended bits for canonical addresses
-	} parts;
-};
-
+/// Namespace containing the main driver logic and IOCTL codes.
 namespace Driver {
+	/// Namespace for constant IOCTL codes used by the driver.
 	namespace Codes {
 		constexpr ULONG INITCODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x775, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // attach
 
@@ -60,45 +59,147 @@ namespace Driver {
 		constexpr ULONG WRITECODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // write
 	}
 
+	/**
+	 * Structure representing information for memory operations.
+	 * This structure is used to pass parameters for reading and writing memory.
+	 * It must be kept in sync with the user-mode counterpart.
+	 */
 	struct Info_t {
 		_In_    HANDLE processId;
 		_In_    PVOID targetAddress;
-		_Inout_ PVOID bufferAddress;
+		_In_    PVOID bufferAddress;
 		_In_    SIZE_T bytesToRead;
 		_Out_   SIZE_T bytesRead;
 	};
 
+	/**
+	 * @brief Main entry point for the driver.
+	 * 
+	 * This function initializes the driver, creates device objects,
+	 * and sets up necessary dispatch routines.
+	 * 
+	 * @param pDriver Pointer to the driver object.
+	 * @param regPath Pointer to the registry path.
+	 * @return NTSTATUS code indicating success or failure.
+	 * 
+	 * @note This function is called by the custom driver entry mechanism.
+	 * due to manual mapping of the driver.
+	 */
 	NTSTATUS NTAPI MainEntryPoint(PDRIVER_OBJECT pDriver, PUNICODE_STRING regPath);
 
+	/**
+	 * @brief Handles unsupported IO requests.
+	 * 
+	 * This function is called for any IOCTLs or IRP major functions
+	 * which are not explicitly supported by the driver.
+	 * 
+	 * @param pDeviceObj Pointer to the device object.
+	 * @param irp Pointer to the I/O request packet.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS HandleUnsupportedIO(PDEVICE_OBJECT pDeviceObj, PIRP irp);
+
+	/**
+	 * @brief Handles create IO requests.
+	 * 
+	 * @param pDeviceObj Pointer to the device object.
+	 * @param irp Pointer to the I/O request packet.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS HandleCreateIO(PDEVICE_OBJECT pDeviceObj, PIRP irp);
+
+	/**
+	 * @brief Handles close IO requests.
+	 * 
+	 * @param pDeviceObj Pointer to the device object.
+	 * @param irp Pointer to the I/O request packet.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS HandleCloseIO(PDEVICE_OBJECT pDeviceObj, PIRP irp);
+
+	/**
+	 * @brief Handles IOCTL requests.
+	 * 
+	 * @param pDev Pointer to the device object.
+	 * @param irp Pointer to the I/O request packet.
+	 * @return NTSTATUS code indicating success or failure.
+	 * 
+	 * @note This function dispatches to specific handlers based on the IOCTL code.
+	 */
 	NTSTATUS HandleIORequest(PDEVICE_OBJECT pDev, PIRP irp);
 
+	/**
+	 * @brief Handles the INIT request to set the target process.
+	 * 
+	 * This function looks up the target process by its PID,
+	 * the PID must be provided in the Info_t structure from user-mode.
+	 * 
+	 * @param buffer Pointer to the Info_t structure containing the process ID.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS HandleInitRequest(Info_t* buffer);
+
+	/**
+	 * @brief Handles the READ request to read memory from the target process.
+	 * 
+	 * @param buffer Pointer to the Info_t structure containing read parameters.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS HandleReadRequest(Info_t* buffer);
+
+	/**
+	 * @brief Handles the WRITE request to write memory to the target process.
+	 * 
+	 * @param buffer Pointer to the Info_t structure containing write parameters.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS HandleWriteRequest(Info_t* buffer);
 
-	UINT64 GetPML4Base(PEPROCESS tProc);
-	PVOID TranslateVirtualToPhysical(UINT64 cr3, VirtualAddress virtualAddress);
+	/**
+	 * @brief Retrieves the PML4 base address for the specified process.
+	 * 
+	 * @note Uses `Driver::targetProcess` to get the PML4 base of the target process.
+	 * @return UINT64 The PML4 base address.
+	 */
+	UINT64 GetPML4Base();
+
+	/**
+	 * @brief Translates a virtual address to its corresponding physical address.
+	 * 
+	 * @param virtualAddress The virtual address to translate.
+	 * @return PVOID The physical address corresponding to the virtual address, or nullptr on failure.
+	 */
+	PVOID TranslateVirtualToPhysical(VirtualAddress virtualAddress);
+
+	/**
+	 * @brief Reads physical memory from the specified physical address.
+	 * 
+	 * This uses MmCopyMemory under the hood to perform the read operation.
+	 * 
+	 * @param physicalAddress The physical address to read from.
+	 * @param buffer The buffer to store the read data.
+	 * @param size The number of bytes to read.
+	 * @param bytesRead Pointer to store the number of bytes actually read.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS ReadPhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesRead);
+
+	/**
+	 * @brief Writes physical memory to the specified physical address.
+	 * 
+	 * This maps the physical memory into the driver's address space,
+	 * performs the write, and then unmaps it.
+	 * 
+	 * @param physicalAddress The physical address to write to.
+	 * @param buffer The buffer containing the data to write.
+	 * @param size The number of bytes to write.
+	 * @param bytesWritten Pointer to store the number of bytes actually written.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
 	NTSTATUS WritePhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesWritten);
 
 	static PEPROCESS targetProcess = nullptr;
 } // namespace Driver
-
-struct PageMapLevel4 {
-    ULONGLONG PageMapLevel4Entry[512];
-};
-struct PageDirectoryPointer {
-    ULONGLONG PageDirectoryPointerEntry[512];
-};
-struct PageDirectory {
-    ULONGLONG PageDirectoryEntry[512];
-};
-struct PageTable {
-    ULONGLONG PageTableEntry[512];
-};
 
 union PTE {
     UINT64 value;
@@ -118,4 +219,21 @@ union PTE {
         UINT64 reserved         : 11; // bits 52-62
         UINT64 executeDisable   : 1;  // bit 63
     } parts;
+};
+
+/**
+ * Represents a 64-bit virtual address and its components in the x86-64 architecture.
+ * This union allows easy access to the different parts of the virtual address (PML4, PDPT, PD, PT, and offset).
+ */
+union VirtualAddress {
+	UINT64 value; // Full 64-bit virtual address
+
+	struct {
+		UINT64 offset     : 12; // Page offset (4 KB pages)
+		UINT64 pt_index   : 9;  // Page Table
+		UINT64 pd_index   : 9;  // Page Directory
+		UINT64 pdpt_index : 9;  // Page Directory Pointer Table
+		UINT64 pml4_index : 9;  // PML4
+		UINT64 reserved   : 16; // Sign-extended bits for canonical addresses
+	} parts;
 };
