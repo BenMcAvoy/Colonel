@@ -1,0 +1,19 @@
+<map id="Driver::HandleIORequest" name="Driver::HandleIORequest">
+<area shape="rect" id="Node000001" title="Handles IOCTL requests." alt="" coords="5,59,206,88"/>
+<area shape="rect" id="Node000002" href="$namespace_driver.html#ab670a133f4a81b3eab1585b753e3fd42" title="Handles the INIT request to set the target process." alt="" coords="263,5,468,35"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="181,55,274,36,275,41,182,61"/>
+<area shape="rect" id="Node000003" href="$namespace_driver.html#abf8463129491eb91c0c5ed267cbc92de" title="Handles the READ request to read memory from the target process." alt="" coords="254,59,477,88"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="206,71,238,71,238,76,206,76"/>
+<area shape="rect" id="Node000007" href="$namespace_driver.html#a3613ef602f5f6a4ed23fee44c18a8c22" title="Handles the WRITE request to write memory to the target process." alt="" coords="255,112,476,142"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="182,86,275,106,274,111,181,92"/>
+<area shape="rect" id="Node000004" href="$namespace_driver.html#a168a471c9d1006117363571a3c71a661" title="Reads physical memory from the specified physical address." alt="" coords="800,28,1030,58"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="477,64,525,62,784,47,785,52,525,67,478,70"/>
+<area shape="rect" id="Node000005" href="$namespace_driver.html#ac81aa446f31a5047fcfb0e1bf3d8f827" title="Translates a virtual address to its corresponding physical address." alt="" coords="547,76,730,124"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="478,82,531,87,531,92,477,87"/>
+<area shape="poly" id="edge6_Node000005_Node000004" title=" " alt="" coords="730,79,825,59,826,64,731,84"/>
+<area shape="rect" id="Node000006" href="$namespace_driver.html#a620b096d5dbc7a69331736e53c8544fa" title="Retrieves the PML4 base address for the specified process." alt="" coords="827,85,1003,115"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="731,98,811,98,811,103,731,103"/>
+<area shape="poly" id="edge8_Node000007_Node000005" title=" " alt="" coords="476,113,531,108,532,113,477,119"/>
+<area shape="rect" id="Node000008" href="$namespace_driver.html#a24efd6b9db110b49637b75d0966f8e92" title="Writes physical memory to the specified physical address." alt="" coords="525,148,752,178"/>
+<area shape="poly" id="edge9_Node000007_Node000008" title=" " alt="" coords="477,139,510,143,509,148,476,144"/>
+</map>

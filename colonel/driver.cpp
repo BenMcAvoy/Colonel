@@ -170,9 +170,6 @@ NTSTATUS Driver::HandleInitRequest(Info_t* buffer) {
 }
 
 UINT64 Driver::GetPML4Base() {
-	/// KPROCESS::DirectoryTableBase
-	/// @link https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/ntos/ke/kprocess/index.htm?tx=158&ts=0,191
-	/// Geoff Chappell’s notes on KPROCESS @endlink
 	constexpr UINT64 DirBaseOffset = 0x28;
 
 	auto dirBase = *reinterpret_cast<ULONG64*>(

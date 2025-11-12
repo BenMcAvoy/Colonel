@@ -82,8 +82,8 @@ namespace Driver {
 	 * @param regPath Pointer to the registry path.
 	 * @return NTSTATUS code indicating success or failure.
 	 * 
-	 * @note This function is called by the custom driver entry mechanism.
-	 * due to manual mapping of the driver.
+	 * @note This function is called by the custom driver entry mechanism
+	 * due to manual mapped nature of the driver.
 	 */
 	NTSTATUS NTAPI MainEntryPoint(PDRIVER_OBJECT pDriver, PUNICODE_STRING regPath);
 
@@ -159,6 +159,9 @@ namespace Driver {
 	 * @brief Retrieves the PML4 base address for the specified process.
 	 * 
 	 * @note Uses `Driver::targetProcess` to get the PML4 base of the target process.
+	 * 
+	 * @note You can find the KPRocess::DirectoryTableBase offset [here](https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/ntos/ke/kprocess/index.htm?tx=158&ts=0,191).
+	 * 
 	 * @return UINT64 The PML4 base address.
 	 */
 	UINT64 GetPML4Base();

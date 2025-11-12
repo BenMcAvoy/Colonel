@@ -1,0 +1,15 @@
+<map id="Driver::ReadPhysicalMemory" name="Driver::ReadPhysicalMemory">
+<area shape="rect" id="Node000001" title="Reads physical memory from the specified physical address." alt="" coords="986,28,1215,58"/>
+<area shape="rect" id="Node000002" href="$namespace_driver.html#abf8463129491eb91c0c5ed267cbc92de" title="Handles the READ request to read memory from the target process." alt="" coords="483,5,706,35"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="970,40,707,28,707,23,971,34"/>
+<area shape="rect" id="Node000005" href="$namespace_driver.html#ac81aa446f31a5047fcfb0e1bf3d8f827" title="Translates a virtual address to its corresponding physical address." alt="" coords="754,49,938,98"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="970,61,939,65,938,60,970,56"/>
+<area shape="rect" id="Node000003" href="$namespace_driver.html#a4df22777b5d3a33e3a64d3d3bbbbdc8f" title="Handles IOCTL requests." alt="" coords="235,32,435,62"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="468,36,436,39,435,34,467,31"/>
+<area shape="rect" id="Node000004" href="$namespace_driver.html#a96f55239b1c011ad1573f4b47b5bda3b" title="Main entry point for the driver." alt="" coords="5,32,187,62"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="219,50,187,50,187,44,219,44"/>
+<area shape="poly" id="edge5_Node000005_Node000002" title=" " alt="" coords="738,53,667,38,668,33,740,48"/>
+<area shape="rect" id="Node000006" href="$namespace_driver.html#a3613ef602f5f6a4ed23fee44c18a8c22" title="Handles the WRITE request to write memory to the target process." alt="" coords="484,59,705,88"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="739,76,706,76,706,71,739,71"/>
+<area shape="poly" id="edge7_Node000006_Node000003" title=" " alt="" coords="468,63,435,60,436,54,469,58"/>
+</map>

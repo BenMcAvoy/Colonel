@@ -1,0 +1,9 @@
+<map id="Driver::WritePhysicalMemory" name="Driver::WritePhysicalMemory">
+<area shape="rect" id="Node000001" title="Writes physical memory to the specified physical address." alt="" coords="752,5,980,35"/>
+<area shape="rect" id="Node000002" href="$namespace_driver.html#a3613ef602f5f6a4ed23fee44c18a8c22" title="Handles the WRITE request to write memory to the target process." alt="" coords="483,5,704,35"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="737,23,705,23,705,18,737,18"/>
+<area shape="rect" id="Node000003" href="$namespace_driver.html#a4df22777b5d3a33e3a64d3d3bbbbdc8f" title="Handles IOCTL requests." alt="" coords="235,5,435,35"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="467,23,436,23,436,18,467,18"/>
+<area shape="rect" id="Node000004" href="$namespace_driver.html#a96f55239b1c011ad1573f4b47b5bda3b" title="Main entry point for the driver." alt="" coords="5,5,187,35"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="219,23,187,23,187,18,219,18"/>
+</map>

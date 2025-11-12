@@ -1,0 +1,7 @@
+<map id="Driver::TranslateVirtualToPhysical" name="Driver::TranslateVirtualToPhysical">
+<area shape="rect" id="Node000001" title="Translates a virtual address to its corresponding physical address." alt="" coords="5,22,189,71"/>
+<area shape="rect" id="Node000002" href="$namespace_driver.html#a620b096d5dbc7a69331736e53c8544fa" title="Retrieves the PML4 base address for the specified process." alt="" coords="263,5,440,35"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="189,35,247,28,248,34,189,40"/>
+<area shape="rect" id="Node000003" href="$namespace_driver.html#a168a471c9d1006117363571a3c71a661" title="Reads physical memory from the specified physical address." alt="" coords="237,59,466,88"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="189,54,221,57,221,62,189,59"/>
+</map>

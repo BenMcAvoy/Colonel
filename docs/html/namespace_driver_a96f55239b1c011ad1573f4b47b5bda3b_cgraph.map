@@ -1,0 +1,27 @@
+<map id="Driver::MainEntryPoint" name="Driver::MainEntryPoint">
+<area shape="rect" id="Node000001" title="Main entry point for the driver." alt="" coords="5,85,187,115"/>
+<area shape="rect" id="Node000002" href="$namespace_driver.html#a9edabca434ff5e1a54ad446be2004231" title="Handles close IO requests." alt="" coords="260,5,442,35"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="132,82,234,44,261,37,262,42,235,49,134,87"/>
+<area shape="rect" id="Node000003" href="$namespace_driver.html#af0bf1b598d54f844637dbbe10d320932" title="Handles create IO requests." alt="" coords="257,59,445,88"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="187,88,241,82,241,88,188,93"/>
+<area shape="rect" id="Node000004" href="$namespace_driver.html#a4df22777b5d3a33e3a64d3d3bbbbdc8f" title="Handles IOCTL requests." alt="" coords="251,112,451,142"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="188,107,235,112,235,117,187,112"/>
+<area shape="rect" id="Node000012" href="$namespace_driver.html#ae4debbe0c4b262c216dac4e5196f1448" title="Handles unsupported IO requests." alt="" coords="235,165,467,195"/>
+<area shape="poly" id="edge13_Node000001_Node000012" title=" " alt="" coords="134,113,235,151,262,159,261,164,234,156,132,118"/>
+<area shape="rect" id="Node000005" href="$namespace_driver.html#ab670a133f4a81b3eab1585b753e3fd42" title="Handles the INIT request to set the target process." alt="" coords="524,59,729,88"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="431,109,531,89,532,94,432,114"/>
+<area shape="rect" id="Node000006" href="$namespace_driver.html#abf8463129491eb91c0c5ed267cbc92de" title="Handles the READ request to read memory from the target process." alt="" coords="515,112,738,142"/>
+<area shape="poly" id="edge5_Node000004_Node000006" title=" " alt="" coords="452,124,499,124,499,130,452,130"/>
+<area shape="rect" id="Node000010" href="$namespace_driver.html#a3613ef602f5f6a4ed23fee44c18a8c22" title="Handles the WRITE request to write memory to the target process." alt="" coords="516,165,737,195"/>
+<area shape="poly" id="edge10_Node000004_Node000010" title=" " alt="" coords="432,140,532,159,531,164,431,145"/>
+<area shape="rect" id="Node000007" href="$namespace_driver.html#a168a471c9d1006117363571a3c71a661" title="Reads physical memory from the specified physical address." alt="" coords="1062,81,1291,111"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="739,118,786,115,1046,100,1046,106,786,120,739,123"/>
+<area shape="rect" id="Node000008" href="$namespace_driver.html#ac81aa446f31a5047fcfb0e1bf3d8f827" title="Translates a virtual address to its corresponding physical address." alt="" coords="808,129,992,178"/>
+<area shape="poly" id="edge7_Node000006_Node000008" title=" " alt="" coords="739,135,793,140,792,146,739,140"/>
+<area shape="poly" id="edge9_Node000008_Node000007" title=" " alt="" coords="992,132,1086,112,1087,117,993,137"/>
+<area shape="rect" id="Node000009" href="$namespace_driver.html#a620b096d5dbc7a69331736e53c8544fa" title="Retrieves the PML4 base address for the specified process." alt="" coords="1088,139,1264,168"/>
+<area shape="poly" id="edge8_Node000008_Node000009" title=" " alt="" coords="992,151,1072,151,1072,156,992,156"/>
+<area shape="poly" id="edge11_Node000010_Node000008" title=" " alt="" coords="737,167,793,161,793,167,738,172"/>
+<area shape="rect" id="Node000011" href="$namespace_driver.html#a24efd6b9db110b49637b75d0966f8e92" title="Writes physical memory to the specified physical address." alt="" coords="786,201,1014,231"/>
+<area shape="poly" id="edge12_Node000010_Node000011" title=" " alt="" coords="738,192,771,197,770,202,737,197"/>
+</map>

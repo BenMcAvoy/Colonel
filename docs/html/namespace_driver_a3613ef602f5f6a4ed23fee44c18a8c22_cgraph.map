@@ -1,0 +1,11 @@
+<map id="Driver::HandleWriteRequest" name="Driver::HandleWriteRequest">
+<area shape="rect" id="Node000001" title="Handles the WRITE request to write memory to the target process." alt="" coords="5,64,227,94"/>
+<area shape="rect" id="Node000002" href="$namespace_driver.html#ac81aa446f31a5047fcfb0e1bf3d8f827" title="Translates a virtual address to its corresponding physical address." alt="" coords="297,22,480,71"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="227,63,281,57,282,62,227,68"/>
+<area shape="rect" id="Node000005" href="$namespace_driver.html#a24efd6b9db110b49637b75d0966f8e92" title="Writes physical memory to the specified physical address." alt="" coords="275,95,502,124"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="227,89,260,92,259,98,227,94"/>
+<area shape="rect" id="Node000003" href="$namespace_driver.html#a620b096d5dbc7a69331736e53c8544fa" title="Retrieves the PML4 base address for the specified process." alt="" coords="576,5,753,35"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="480,35,561,27,561,33,481,41"/>
+<area shape="rect" id="Node000004" href="$namespace_driver.html#a168a471c9d1006117363571a3c71a661" title="Reads physical memory from the specified physical address." alt="" coords="550,59,779,88"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="481,53,534,58,534,64,480,58"/>
+</map>

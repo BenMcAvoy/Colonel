@@ -14,10 +14,7 @@ int main(void) {
 		std::println("Base address of notepad.exe: 0x{:X}", baseAddress);
 
 		int16_t iMagic = dm.read<int16_t>(baseAddress);
-		char magic[3] = {};
-		memcpy(magic, &iMagic, sizeof(iMagic));
-		magic[2] = '\0';
-
+		std::string_view magic(reinterpret_cast<char*>(&iMagic), 2);
 		std::println("PE Signature: {}", magic);
 
 		return 0;
