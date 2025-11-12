@@ -1,12 +1,34 @@
 #include "driver.h"
 
+#include <vendor/skCrypter.h>
+#include <vendor/kli.hpp>
+
 using namespace Driver;
+
+#define INITIALIZE(fn) do { \
+	p##fn = KLI_FN(fn); \
+	LOG("KLI Cache - %s initialized at %p", __FUNCTION__, #fn, p##fn); \
+} while(0)
+
+void KFNs::Initialize() {
+	INITIALIZE(DbgPrintEx);
+	INITIALIZE(IoCreateDevice);
+	INITIALIZE(IoCreateSymbolicLink);
+	INITIALIZE(IofCompleteRequest);
+	INITIALIZE(PsLookupProcessByProcessId);
+	INITIALIZE(MmCopyMemory);
+	INITIALIZE(MmMapIoSpace);
+	INITIALIZE(MmUnmapIoSpace);
+	INITIALIZE(IoCreateDriver);
+	INITIALIZE(DbgPrintEx);
+	INITIALIZE(RtlInitUnicodeString);
+}
 
 NTSTATUS Driver::HandleUnsupportedIO(PDEVICE_OBJECT pDeviceObj, PIRP irp) {
 	UNREFERENCED_PARAMETER(pDeviceObj);
 	
 	irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
 	return irp->IoStatus.Status;
 }
 
@@ -16,7 +38,7 @@ NTSTATUS Driver::HandleCreateIO(PDEVICE_OBJECT pDeviceObj, PIRP irp) {
 	LOG("CreateIO called. Device opened");
 	irp->IoStatus.Status = STATUS_SUCCESS;
 	irp->IoStatus.Information = 0;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
 	return irp->IoStatus.Status;
 }
 
@@ -26,36 +48,35 @@ NTSTATUS Driver::HandleCloseIO(PDEVICE_OBJECT pDeviceObj, PIRP irp) {
 	LOG("CloseIO called. Device closed");
 	irp->IoStatus.Status = STATUS_SUCCESS;
 	irp->IoStatus.Information = 0;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
 	return irp->IoStatus.Status;
 }
 
 NTSTATUS NTAPI Driver::MainEntryPoint(PDRIVER_OBJECT pDriver, PUNICODE_STRING regPath) {
 	UNREFERENCED_PARAMETER(regPath);
 
-	UNICODE_STRING devName, symLink, symLinkGlobal;
 	PDEVICE_OBJECT pDevObj = nullptr;
 
-	RtlInitUnicodeString(&devName, L"\\Device\\colonelDevice");
-	RtlInitUnicodeString(&symLink, L"\\??\\colonelLink");
-	RtlInitUnicodeString(&symLinkGlobal, L"\\DosDevices\\Global\\colonelLink");
+	auto devName = INIT_USTRING(L"\\Device\\colonelDevice");
+	auto symLink = INIT_USTRING(L"\\??\\colonelLink");
+	auto symLinkGlobal = INIT_USTRING(L"\\DosDevices\\Global\\colonelLink");
 
 	LOG("Creating device: \\Device\\colonelDevice");
-	auto status = IoCreateDevice( pDriver, 0, &devName, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &pDevObj);
+	auto status = KFNs::pIoCreateDevice(pDriver, 0, &devName, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &pDevObj);
 	if (!NT_SUCCESS(status)) {
 		LOG("ERROR: IoCreateDevice failed with status 0x%X", status);
 		return status;
 	}
 
 	LOG("Creating symbolic link: \\??\\colonelLink");
-	status = IoCreateSymbolicLink(&symLink, &devName);
+	status = KFNs::pIoCreateSymbolicLink(&symLink, &devName);
 	if (!NT_SUCCESS(status)) {
 		LOG("ERROR: IoCreateSymbolicLink(\\??) failed with status 0x%X", status);
 		return status;
 	}
 
 	LOG("Creating symbolic link: \\DosDevices\\Global\\colonelLink");
-	NTSTATUS statusGlobal = IoCreateSymbolicLink(&symLinkGlobal, &devName);
+	NTSTATUS statusGlobal = KFNs::pIoCreateSymbolicLink(&symLinkGlobal, &devName);
 	if (!NT_SUCCESS(statusGlobal)) {
 		LOG("ERROR: IoCreateSymbolicLink(\\DosDevices\\Global) failed with status 0x%X", statusGlobal);
 		return statusGlobal;
@@ -92,7 +113,7 @@ NTSTATUS Driver::HandleIORequest(PDEVICE_OBJECT pDev, PIRP irp) {
 		LOG("ERROR: Stack is NULL");
 
 		irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
-		IoCompleteRequest(irp, IO_NO_INCREMENT);
+		KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
 
 		return STATUS_INVALID_PARAMETER;
 	}
@@ -113,7 +134,7 @@ NTSTATUS Driver::HandleIORequest(PDEVICE_OBJECT pDev, PIRP irp) {
 	}
 
 	irp->IoStatus.Status = status;
-	IoCompleteRequest(irp, IO_NO_INCREMENT);
+	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
 
 	return status;
 }
@@ -124,7 +145,7 @@ NTSTATUS Driver::HandleInitRequest(Info_t* buffer) {
 		return STATUS_INVALID_PARAMETER;
 	}
 
-	NTSTATUS getProcessStatus = PsLookupProcessByProcessId(buffer->processId, &Driver::targetProcess);
+	NTSTATUS getProcessStatus = KFNs::pPsLookupProcessByProcessId(buffer->processId, &Driver::targetProcess);
 
 	if (!NT_SUCCESS(getProcessStatus)) {
 		LOG("ERROR: GetProcessByName failed with status 0x%X", getProcessStatus);
@@ -229,18 +250,16 @@ PVOID Driver::TranslateVirtualToPhysical(UINT64 pml4PhysBase, VirtualAddress va)
 	return reinterpret_cast<PVOID>(phys);
 }
 
-// MmCopyMemory
 NTSTATUS Driver::ReadPhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesRead) {
 	MM_COPY_ADDRESS fromAddress{};
 	fromAddress.PhysicalAddress.QuadPart = reinterpret_cast<UINT64>(physicalAddress);
-	return MmCopyMemory(buffer, fromAddress, size, MM_COPY_MEMORY_PHYSICAL, bytesRead);
+	return KFNs::pMmCopyMemory(buffer, fromAddress, size, MM_COPY_MEMORY_PHYSICAL, bytesRead);
 }
 
-// MmMapIoSpace + RtlCopyMemory
 NTSTATUS Driver::WritePhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesWritten) {
 	PHYSICAL_ADDRESS physAddr{};
 	physAddr.QuadPart = reinterpret_cast<UINT64>(physicalAddress);
-	VOID* mappedAddress = MmMapIoSpace(physAddr, size, MmNonCached);
+	VOID* mappedAddress = KFNs::pMmMapIoSpace(physAddr, size, MmNonCached);
 
 	if (!mappedAddress) {
 		LOG("ERROR: MmMapIoSpace failed in WRITE request");
@@ -248,7 +267,7 @@ NTSTATUS Driver::WritePhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T
 	}
 
 	RtlCopyMemory(mappedAddress, buffer, size);
-	MmUnmapIoSpace(mappedAddress, size);
+	KFNs::pMmUnmapIoSpace(mappedAddress, size);
 
 	if (bytesWritten) *bytesWritten = size;
 	return STATUS_SUCCESS;

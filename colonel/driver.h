@@ -7,25 +7,37 @@
 #include <ntstrsafe.h>
 #include <intrin.h>
 
+#include <vendor/kli.hpp>
+
 #include "helpers.h"
+
+extern "C" NTSTATUS NTAPI IoCreateDriver(PUNICODE_STRING DriverName, PDRIVER_INITIALIZE InitializationFunction);
+
+namespace KFNs {
+	inline decltype(&IoCreateDevice) pIoCreateDevice = nullptr;
+	inline decltype(&IoCreateSymbolicLink) pIoCreateSymbolicLink = nullptr;
+	inline decltype(&IoGetCurrentIrpStackLocation) pIoGetCurrentIrpStackLocation = nullptr;
+	inline decltype(&IofCompleteRequest) pIofCompleteRequest = nullptr;
+	inline decltype(&PsLookupProcessByProcessId) pPsLookupProcessByProcessId = nullptr;
+	inline decltype(&MmCopyMemory) pMmCopyMemory = nullptr;
+	inline decltype(&MmMapIoSpace) pMmMapIoSpace = nullptr;
+	inline decltype(&IoCreateDriver) pIoCreateDriver = nullptr;
+	inline decltype(&MmUnmapIoSpace) pMmUnmapIoSpace = nullptr;
+	inline decltype(&DbgPrintEx) pDbgPrintEx = nullptr;
+	inline decltype(&RtlInitUnicodeString) pRtlInitUnicodeString = nullptr;
+
+	void Initialize();
+}
 
 #ifdef COLONEL_DEBUG
 #define LOG(fmt, ...) \
-    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, \
+    KFNs::pDbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, \
                "[COLONEL] %s: " fmt "\n", __FUNCTION__, ##__VA_ARGS__)
 #else
 #define LOG(fmt, ...)
 #endif
 
 #define MAX_NAME_LEN 256
-
-extern "C" {
-	// IoCreateDriver
-	NTSTATUS IoCreateDriver(
-		_In_ PUNICODE_STRING DriverName,
-		_In_ PDRIVER_INITIALIZE InitializationFunction
-	);
-}
 
 union VirtualAddress {
 	UINT64 value; // full 64-bit virtual address

@@ -13,12 +13,12 @@ int main(void) {
 
 		std::println("Base address of notepad.exe: 0x{:X}", baseAddress);
 
-		int16_t mz = dm.read<int16_t>(baseAddress);
-		char pe[3] = {};
-		memcpy(pe, &mz, sizeof(mz));
-		pe[2] = '\0';
+		int16_t iMagic = dm.read<int16_t>(baseAddress);
+		char magic[3] = {};
+		memcpy(magic, &iMagic, sizeof(iMagic));
+		magic[2] = '\0';
 
-		std::println("MZ Signature: {}", pe);
+		std::println("PE Signature: {}", magic);
 
 		return 0;
 	}

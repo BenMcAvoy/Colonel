@@ -1,17 +1,21 @@
+#include "helpers.h"
 #include "driver.h"
 
-extern "C" NTSTATUS DriverEntry(
-	_In_ PDRIVER_OBJECT  a1,
-	_In_ PUNICODE_STRING a2
-) {
-	UNREFERENCED_PARAMETER(a1);
-	UNREFERENCED_PARAMETER(a2);
+#include <vendor/skCrypter.h>
 
-	UNICODE_STRING driverName;
-	RtlInitUnicodeString(&driverName, L"\\Driver\\colonelDriver");
-	
-	LOG("Creating driver with DriverName: %wZ", &driverName);
-	auto res = IoCreateDriver(&driverName, &Driver::MainEntryPoint);
+extern "C" NTSTATUS DriverEntry(
+	_In_ PDRIVER_OBJECT DriverObject,
+	_In_ PUNICODE_STRING RegistryPath
+) {
+	UNREFERENCED_PARAMETER(DriverObject);
+	UNREFERENCED_PARAMETER(RegistryPath);
+
+	KFNs::Initialize();
+
+	LOG("Driver object @ %p", DriverObject);
+
+	auto driverName = INIT_USTRING(L"\\Driver\\colonelDriver");
+	auto res = KFNs::pIoCreateDriver(&driverName, &Driver::MainEntryPoint);
 
 	if (!NT_SUCCESS(res)) {
 		LOG("ERROR: IoCreateDriver failed with status 0x%X", res);
