@@ -166,6 +166,8 @@ NTSTATUS Driver::HandleInitRequest(Info_t* buffer) {
 		return getProcessStatus;
 	}
 
+	LOG("Successfully set target process to PID %llu", buffer->processId);
+
 	return STATUS_SUCCESS;
 }
 
@@ -333,10 +335,16 @@ NTSTATUS Driver::HandleReadRequest(Info_t* buffer) {
 	VirtualAddress& va = *reinterpret_cast<VirtualAddress*>(&buffer->targetAddress);
 	VOID* physAddress = TranslateVirtualToPhysical(va);
 
+	LOG("READ VA 0x%llX at PA %p", va.value, physAddress);
+
 	// Prevent crossing page boundaries (this would cause issues)
 	// TODO: Handle multi-page reads/writes (we just read/write up to the page boundary for now)
 	ULONG64 finalSize = Min(PAGE_SIZE - ((INT64)physAddress & 0xFFF), (LONGLONG)buffer->bytesToRead);
     SIZE_T bytesRead = NULL;
+
+	if (finalSize != buffer->bytesToRead) {
+		LOG("WARNING: Read request crosses page boundary, limiting read size to %llu bytes", finalSize);
+	}
 
 	// Read the physical memory into the user buffer
 	NTSTATUS res = ReadPhysicalMemory(PVOID(physAddress), buffer->bufferAddress, finalSize, &bytesRead);
@@ -365,9 +373,16 @@ NTSTATUS Driver::HandleWriteRequest(Info_t* buffer) {
 	VirtualAddress& va = *reinterpret_cast<VirtualAddress*>(&buffer->targetAddress);
 	VOID* physAddress = TranslateVirtualToPhysical(va);
 
+	LOG("WRITE VA 0x%llX at PA %p", va.value, physAddress);
+
 	// Prevent crossing page boundaries (this would cause issues)
 	// TODO: Handle multi-page reads/writes (we just read/write up to the page boundary for now)
 	ULONG64 finalSize = Min(PAGE_SIZE - ((INT64)physAddress & 0xFFF), (LONGLONG)buffer->bytesToRead);
+
+	if (finalSize != buffer->bytesToRead) {
+		LOG("WARNING: Write request crosses page boundary, limiting write size to %llu bytes", finalSize);
+	}
+
 	NTSTATUS res = WritePhysicalMemory(PVOID(physAddress), buffer->bufferAddress, finalSize, &bytesWritten);
 
 	if (!NT_SUCCESS(res)) { // Handle write failure
