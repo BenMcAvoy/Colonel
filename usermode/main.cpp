@@ -7,41 +7,14 @@
 static DriverManager dm("colonelLink");
 static uintptr_t imgBase = 0;
 
-namespace Offsets {
-	namespace G {
-		constexpr uintptr_t contraption = 0x1267538;
-	}
-
-	namespace Contraption {
-		constexpr uintptr_t width = 0x68;
-		constexpr uintptr_t height = 0x6C;
-	}
-};
-
-class Contraption {
-public:
-	Contraption(uintptr_t addr) : base(addr) {}
-
-private:
-	uintptr_t base;
-
-public:
-	uint32_t getWidth() const { return dm.read<uint32_t>(base + Offsets::Contraption::width); }
-	uint32_t getHeight() const { return dm.read<uint32_t>(base + Offsets::Contraption::height); }
-
-	static Contraption getInstance() {
-		uintptr_t addr = dm.read<uintptr_t>(imgBase + Offsets::G::contraption);
-		return Contraption{ addr };
-	}
-};
-
 int main(void) {
 	try {
-		dm.attachToProcess("ScrapMechanic.exe", &imgBase);
+		dm.attachToProcess("ScrapMechanic.exe", false, &imgBase);
 
-		uintptr_t baseAddress = 0;
-		dm.attachToProcess("BrickRigsSteam-Win64-Shipping.exe", false, &baseAddress);
-		std::println("Base address: 0x{:X}", baseAddress);
+		std::println("Base address: 0x{:X}", imgBase);
+
+		int32_t magic = dm.read<int32_t>(imgBase);
+		std::println("Magic value at base address: 0x{:X}", magic);
 
 		return 0;
 	}
