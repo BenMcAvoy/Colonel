@@ -57,6 +57,8 @@ namespace Driver {
 
 		constexpr ULONG READCODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x776, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // read
 		constexpr ULONG WRITECODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // write
+
+		constexpr ULONG GETBASECODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x778, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // get base
 	}
 
 	/**
@@ -154,6 +156,14 @@ namespace Driver {
 	 * @return NTSTATUS code indicating success or failure.
 	 */
 	NTSTATUS HandleWriteRequest(Info_t* buffer);
+
+	/**
+	 * @brief Handles the GETBASE request to retrieve the base address of the target process.
+	 * 
+	 * @param buffer Pointer to the Info_t structure to store the base address.
+	 * @return NTSTATUS code indicating success or failure.
+	 */
+	NTSTATUS HandleGetBaseRequest(Info_t* buffer);
 
 	/**
 	 * @brief Retrieves the PML4 base address for the specified process.

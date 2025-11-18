@@ -103,7 +103,7 @@ Public Member Functions</h2></td></tr>
 <a class="el" href="class_driver_manager.html">DriverManager</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><b>operator=</b> (const <a class="el" href="class_driver_manager.html">DriverManager</a> &amp;)=delete</td></tr>
 <tr class="memitem:a5db272a93cf4bdc200a2dc62061ad354" id="r_a5db272a93cf4bdc200a2dc62061ad354"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5db272a93cf4bdc200a2dc62061ad354">isValid</a> () const</td></tr>
 <tr class="memitem:ae85d7436758e3ec0d803425fe3b0cb85" id="r_ae85d7436758e3ec0d803425fe3b0cb85"><td class="memItemLeft" align="right" valign="top">DWORD&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae85d7436758e3ec0d803425fe3b0cb85">getTargetPID</a> () const</td></tr>
-<tr class="memitem:af63fbcfa2f6953b8ab462bbd60ada7a2" id="r_af63fbcfa2f6953b8ab462bbd60ada7a2"><td class="memItemLeft" align="right" valign="top">DriverStatus&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af63fbcfa2f6953b8ab462bbd60ada7a2">attachToProcess</a> (std::string_view procName, uintptr_t *outBaseAddress=nullptr) const</td></tr>
+<tr class="memitem:a9c782d083de7bfbd029b1a77825a1160" id="r_a9c782d083de7bfbd029b1a77825a1160"><td class="memItemLeft" align="right" valign="top">DriverStatus&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9c782d083de7bfbd029b1a77825a1160">attachToProcess</a> (std::string_view procName, bool useUMModuleEnum=false, uintptr_t *outBaseAddress=nullptr) const</td></tr>
 <tr class="memitem:ac921f6e2fb21f4d4f013443e99737aca" id="r_ac921f6e2fb21f4d4f013443e99737aca"><td class="memTemplParams" colspan="2">template&lt;typename T, <a class="el" href="concept_addressable.html">Addressable</a> U&gt; </td></tr>
 <tr class="memitem:ac921f6e2fb21f4d4f013443e99737aca template"><td class="memItemLeft" align="right" valign="top">T&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac921f6e2fb21f4d4f013443e99737aca">read</a> (U address, DriverStatus *outStatus=nullptr)</td></tr>
 <tr class="memitem:a625ebcf00519e09555c4852427d89a5e" id="r_a625ebcf00519e09555c4852427d89a5e"><td class="memTemplParams" colspan="2">template&lt;typename T, <a class="el" href="concept_addressable.html">Addressable</a> U&gt; </td></tr>
@@ -111,7 +111,7 @@ Public Member Functions</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-static-methods" class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a51a009c9c320316c8746262432678eec" id="r_a51a009c9c320316c8746262432678eec"><td class="memItemLeft" align="right" valign="top">static DWORD&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a51a009c9c320316c8746262432678eec">getPIDByName</a> (std::string_view procName, uintptr_t *outBaseAddress=nullptr)</td></tr>
+<tr class="memitem:a8bd8ff83dda6d1c3887d3e1f1833e79f" id="r_a8bd8ff83dda6d1c3887d3e1f1833e79f"><td class="memItemLeft" align="right" valign="top">static DWORD&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8bd8ff83dda6d1c3887d3e1f1833e79f">getPIDByName</a> (std::string_view procName, bool useUMModuleEnum, uintptr_t *outBaseAddress=nullptr)</td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock">
@@ -164,8 +164,8 @@ Static Public Member Functions</h2></td></tr>
 </div>
 </div>
 <a name="doc-func-members" id="doc-func-members"></a><h2 id="header-doc-func-members" class="groupheader">Member Function Documentation</h2>
-<a id="af63fbcfa2f6953b8ab462bbd60ada7a2" name="af63fbcfa2f6953b8ab462bbd60ada7a2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af63fbcfa2f6953b8ab462bbd60ada7a2">&#9670;&#160;</a></span>attachToProcess()</h2>
+<a id="a9c782d083de7bfbd029b1a77825a1160" name="a9c782d083de7bfbd029b1a77825a1160"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9c782d083de7bfbd029b1a77825a1160">&#9670;&#160;</a></span>attachToProcess()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -174,6 +174,11 @@ Static Public Member Functions</h2></td></tr>
           <td class="memname">DriverStatus DriverManager::attachToProcess </td>
           <td>(</td>
           <td class="paramtype">std::string_view</td>          <td class="paramname"><span class="paramname"><em>procName</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>useUMModuleEnum</em></span><span class="paramdefsep"> = </span><span class="paramdefval">false</span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -187,8 +192,8 @@ Static Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a51a009c9c320316c8746262432678eec" name="a51a009c9c320316c8746262432678eec"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a51a009c9c320316c8746262432678eec">&#9670;&#160;</a></span>getPIDByName()</h2>
+<a id="a8bd8ff83dda6d1c3887d3e1f1833e79f" name="a8bd8ff83dda6d1c3887d3e1f1833e79f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8bd8ff83dda6d1c3887d3e1f1833e79f">&#9670;&#160;</a></span>getPIDByName()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -200,6 +205,11 @@ Static Public Member Functions</h2></td></tr>
           <td class="memname">DWORD DriverManager::getPIDByName </td>
           <td>(</td>
           <td class="paramtype">std::string_view</td>          <td class="paramname"><span class="paramname"><em>procName</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>useUMModuleEnum</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

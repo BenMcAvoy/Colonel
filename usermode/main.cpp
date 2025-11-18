@@ -9,13 +9,8 @@ int main(void) {
 		DriverManager dm("colonelLink");
 
 		uintptr_t baseAddress = 0;
-		dm.attachToProcess("notepad.exe", &baseAddress);
-
-		std::println("Base address of notepad.exe: 0x{:X}", baseAddress);
-
-		int16_t iMagic = dm.read<int16_t>(baseAddress);
-		std::string_view magic(reinterpret_cast<char*>(&iMagic), 2);
-		std::println("PE Signature: {}", magic);
+		dm.attachToProcess("BrickRigsSteam-Win64-Shipping.exe", false, &baseAddress);
+		std::println("Base address: 0x{:X}", baseAddress);
 
 		return 0;
 	}

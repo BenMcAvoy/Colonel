@@ -5,6 +5,7 @@ var namespace_driver =
     [ "GetPML4Base", "namespace_driver.html#a620b096d5dbc7a69331736e53c8544fa", null ],
     [ "HandleCloseIO", "namespace_driver.html#a9edabca434ff5e1a54ad446be2004231", null ],
     [ "HandleCreateIO", "namespace_driver.html#af0bf1b598d54f844637dbbe10d320932", null ],
+    [ "HandleGetBaseRequest", "namespace_driver.html#adf4c412763b2610865c39f4646ce7f34", null ],
     [ "HandleInitRequest", "namespace_driver.html#ab670a133f4a81b3eab1585b753e3fd42", null ],
     [ "HandleIORequest", "namespace_driver.html#a4df22777b5d3a33e3a64d3d3bbbbdc8f", null ],
     [ "HandleReadRequest", "namespace_driver.html#abf8463129491eb91c0c5ed267cbc92de", null ],

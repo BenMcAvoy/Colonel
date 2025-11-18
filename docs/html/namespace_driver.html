@@ -124,6 +124,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:abf8463129491eb91c0c5ed267cbc92de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handles the READ request to read memory from the target process.  <br /></td></tr>
 <tr class="memitem:a3613ef602f5f6a4ed23fee44c18a8c22" id="r_a3613ef602f5f6a4ed23fee44c18a8c22"><td class="memItemLeft" align="right" valign="top">NTSTATUS&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3613ef602f5f6a4ed23fee44c18a8c22">HandleWriteRequest</a> (<a class="el" href="struct_driver_1_1_info__t.html">Info_t</a> *buffer)</td></tr>
 <tr class="memdesc:a3613ef602f5f6a4ed23fee44c18a8c22"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handles the WRITE request to write memory to the target process.  <br /></td></tr>
+<tr class="memitem:adf4c412763b2610865c39f4646ce7f34" id="r_adf4c412763b2610865c39f4646ce7f34"><td class="memItemLeft" align="right" valign="top">NTSTATUS&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#adf4c412763b2610865c39f4646ce7f34">HandleGetBaseRequest</a> (<a class="el" href="struct_driver_1_1_info__t.html">Info_t</a> *buffer)</td></tr>
+<tr class="memdesc:adf4c412763b2610865c39f4646ce7f34"><td class="mdescLeft">&#160;</td><td class="mdescRight">Handles the GETBASE request to retrieve the base address of the target process.  <br /></td></tr>
 <tr class="memitem:a620b096d5dbc7a69331736e53c8544fa" id="r_a620b096d5dbc7a69331736e53c8544fa"><td class="memItemLeft" align="right" valign="top">UINT64&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a620b096d5dbc7a69331736e53c8544fa">GetPML4Base</a> ()</td></tr>
 <tr class="memdesc:a620b096d5dbc7a69331736e53c8544fa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Retrieves the PML4 base address for the specified process.  <br /></td></tr>
 <tr class="memitem:ac81aa446f31a5047fcfb0e1bf3d8f827" id="r_ac81aa446f31a5047fcfb0e1bf3d8f827"><td class="memItemLeft" align="right" valign="top">PVOID&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac81aa446f31a5047fcfb0e1bf3d8f827">TranslateVirtualToPhysical</a> (<a class="el" href="union_virtual_address.html">VirtualAddress</a> virtualAddress)</td></tr>
@@ -157,7 +159,7 @@ Functions</h2></td></tr>
 You can find the KPRocess::DirectoryTableBase offset <a href="https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/ntos/ke/kprocess/index.htm?tx=158&amp;ts=0,191">here</a>.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>UINT64 The PML4 base address. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00172">172</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00175">175</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
 <div class="dynheader">
 Here is the caller graph for this function:</div>
 <div class="dyncontent">
@@ -242,6 +244,39 @@ Here is the caller graph for this function:</div>
 
 </div>
 </div>
+<a id="adf4c412763b2610865c39f4646ce7f34" name="adf4c412763b2610865c39f4646ce7f34"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adf4c412763b2610865c39f4646ce7f34">&#9670;&#160;</a></span>HandleGetBaseRequest()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">NTSTATUS Driver::HandleGetBaseRequest </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="struct_driver_1_1_info__t.html">Info_t</a> *</td>          <td class="paramname"><span class="paramname"><em>buffer</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Handles the GETBASE request to retrieve the base address of the target process. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">buffer</td><td>Pointer to the <a class="el" href="struct_driver_1_1_info__t.html">Info_t</a> structure to store the base address. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>NTSTATUS code indicating success or failure. </dd></dl>
+
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00385">385</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<div class="dynheader">
+Here is the caller graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><iframe scrolling="no" loading="lazy" frameborder="0" src="namespace_driver_adf4c412763b2610865c39f4646ce7f34_icgraph.svg" width="735" height="40"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe></div>
+</div>
+
+</div>
+</div>
 <a id="ab670a133f4a81b3eab1585b753e3fd42" name="ab670a133f4a81b3eab1585b753e3fd42"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab670a133f4a81b3eab1585b753e3fd42">&#9670;&#160;</a></span>HandleInitRequest()</h2>
 
@@ -267,7 +302,7 @@ Here is the caller graph for this function:</div>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>NTSTATUS code indicating success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00154">154</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00157">157</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
 <div class="dynheader">
 Here is the caller graph for this function:</div>
 <div class="dyncontent">
@@ -310,7 +345,7 @@ Here is the caller graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><iframe scrolling="no" loading="lazy" frameborder="0" src="namespace_driver_a4df22777b5d3a33e3a64d3d3bbbbdc8f_cgraph.svg" width="1035" height="183"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe></div>
+<div class="center"><iframe scrolling="no" loading="lazy" frameborder="0" src="namespace_driver_a4df22777b5d3a33e3a64d3d3bbbbdc8f_cgraph.svg" width="1059" height="236"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe></div>
 </div>
 <div class="dynheader">
 Here is the caller graph for this function:</div>
@@ -344,7 +379,7 @@ Here is the caller graph for this function:</div>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>NTSTATUS code indicating success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00322">322</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00325">325</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -421,7 +456,7 @@ Here is the caller graph for this function:</div>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>NTSTATUS code indicating success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00352">352</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00355">355</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -470,7 +505,7 @@ Here is the caller graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><iframe scrolling="no" loading="lazy" frameborder="0" src="namespace_driver_a96f55239b1c011ad1573f4b47b5bda3b_cgraph.svg" width="1296" height="236"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe></div>
+<div class="center"><iframe scrolling="no" loading="lazy" frameborder="0" src="namespace_driver_a96f55239b1c011ad1573f4b47b5bda3b_cgraph.svg" width="1320" height="263"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe></div>
 </div>
 
 </div>
@@ -517,7 +552,7 @@ Here is the call graph for this function:</div>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>NTSTATUS code indicating success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00293">293</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00296">296</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
 <div class="dynheader">
 Here is the caller graph for this function:</div>
 <div class="dyncontent">
@@ -550,7 +585,7 @@ Here is the caller graph for this function:</div>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>PVOID The physical address corresponding to the virtual address, or nullptr on failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00182">182</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00185">185</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
@@ -606,7 +641,7 @@ Here is the caller graph for this function:</div>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>NTSTATUS code indicating success or failure. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00299">299</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="colonel_2driver_8cpp_source.html#l00302">302</a> of file <a class="el" href="colonel_2driver_8cpp_source.html">driver.cpp</a>.</p>
 <div class="dynheader">
 Here is the caller graph for this function:</div>
 <div class="dyncontent">

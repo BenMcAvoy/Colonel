@@ -76,8 +76,8 @@ public:
 	bool isValid() const { return hDriver_ != nullptr; }
 	DWORD getTargetPID() const { return targetPID_; }
 
-	static DWORD getPIDByName(std::string_view procName, uintptr_t* outBaseAddress = nullptr);
-	DriverStatus attachToProcess(std::string_view procName, uintptr_t* outBaseAddress = nullptr) const;
+	static DWORD getPIDByName(std::string_view procName, bool useUMModuleEnum, uintptr_t* outBaseAddress = nullptr);
+	DriverStatus attachToProcess(std::string_view procName, bool useUMModuleEnum = false, uintptr_t* outBaseAddress = nullptr) const;
 
 	template <typename T, Addressable U>
 	T read(U address, DriverStatus* outStatus = nullptr) {
@@ -177,4 +177,5 @@ private:
 	static inline constexpr ULONG INITCODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x775, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // attach
 	static inline constexpr ULONG READCODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x776, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // read
 	static inline constexpr ULONG WRITECODE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // write
+	static inline constexpr ULONG GETSBADDR = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x778, METHOD_BUFFERED, FILE_SPECIAL_ACCESS); // get base addr
 };

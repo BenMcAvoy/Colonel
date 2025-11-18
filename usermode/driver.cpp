@@ -21,7 +21,7 @@ DriverManager::DriverManager(std::string_view driverName)
 	}
 }
 
-DWORD DriverManager::getPIDByName(std::string_view procName, uintptr_t* outBaseAddress) {
+DWORD DriverManager::getPIDByName(std::string_view procName, bool useUMModuleEnum, uintptr_t* outBaseAddress) {
 	auto snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (snap == INVALID_HANDLE_VALUE) {
 		return 0;
@@ -33,7 +33,7 @@ DWORD DriverManager::getPIDByName(std::string_view procName, uintptr_t* outBaseA
 		do {
 			std::wstring wProcName(procName.begin(), procName.end());
 			if (wProcName == pe32.szExeFile) {
-				if (outBaseAddress) {
+				if (outBaseAddress && useUMModuleEnum) {
 					auto modSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pe32.th32ProcessID);
 					if (modSnap != INVALID_HANDLE_VALUE) {
 						MODULEENTRY32 me32{};
@@ -53,8 +53,8 @@ DWORD DriverManager::getPIDByName(std::string_view procName, uintptr_t* outBaseA
 	return 0;
 }
 
-DriverStatus DriverManager::attachToProcess(std::string_view procName, uintptr_t* outBaseAddress) const {
-	DWORD pid = getPIDByName(procName, outBaseAddress);
+DriverStatus DriverManager::attachToProcess(std::string_view procName, bool useUMModuleEnum, uintptr_t* outBaseAddress) const {
+	DWORD pid = getPIDByName(procName, useUMModuleEnum, outBaseAddress);
 
 	Info_t info{};
 	info.targetPID = static_cast<UINT64>(pid);
@@ -79,6 +79,31 @@ DriverStatus DriverManager::attachToProcess(std::string_view procName, uintptr_t
 		DWORD error = GetLastError();
 		throw DriverException(DriverStatus::FailedToAttach,
 			std::format("DeviceIoControl INITCODE failed with error: {} (0x{:X})", error, error));
+	}
+
+	if (outBaseAddress && !useUMModuleEnum) {
+		Info_t baseInfo{};
+		baseInfo.targetPID = static_cast<UINT64>(pid);
+
+		DWORD baseBytesReturned = 0;
+		BOOL baseResult = DeviceIoControl(
+			hDriver_,
+			GETSBADDR,
+			&baseInfo,
+			sizeof(Info_t),
+			&baseInfo,
+			sizeof(Info_t),
+			&baseBytesReturned,
+			NULL
+		);
+
+		if (!baseResult) {
+			DWORD error = GetLastError();
+			throw DriverException(DriverStatus::FailedToAttach,
+				std::format("DeviceIoControl GETSBADDR failed with error: {} (0x{:X})", error, error));
+		}
+
+		*outBaseAddress = static_cast<uintptr_t>(baseInfo.targetAddress);
 	}
 
 	return DriverStatus::Success;

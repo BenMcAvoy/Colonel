@@ -142,6 +142,9 @@ NTSTATUS Driver::HandleIORequest(PDEVICE_OBJECT pDev, PIRP irp) {
 	case Codes::INITCODE:
 		status = HandleInitRequest(buffer);
 		break;
+	case Codes::GETBASECODE:
+		status = HandleGetBaseRequest(buffer);
+		break;
 	}
 
 	// Complete the request
@@ -376,5 +379,25 @@ NTSTATUS Driver::HandleWriteRequest(Info_t* buffer) {
 	}
 
 	buffer->bytesRead = bytesWritten;
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS Driver::HandleGetBaseRequest(Info_t* buffer) {
+	if (!buffer) { // Handle null buffer
+		LOG("ERROR: Buffer is NULL in GETBASE request");
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if (!Driver::targetProcess) { // Handle no target process (user needs to call INIT first)
+		LOG("ERROR: No target process attached in GETBASE request");
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	// EPROCESS+0x2B0 == SectionBaseAddress
+	UINT64 baseAddress = *reinterpret_cast<UINT64*>(
+		reinterpret_cast<UINT64>(Driver::targetProcess) + 0x2B0
+		);
+
+	buffer->targetAddress = reinterpret_cast<PVOID>(baseAddress);
 	return STATUS_SUCCESS;
 }
