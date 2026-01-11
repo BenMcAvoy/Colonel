@@ -11,7 +11,7 @@
 
 /// Define to enable debug logging
 /// If undefined, logging calls will not be included in the build
-#define COLONEL_DEBUG
+// #define COLONEL_DEBUG
 
 extern "C" NTSTATUS NTAPI IoCreateDriver(PUNICODE_STRING DriverName, PDRIVER_INITIALIZE InitializationFunction);
 

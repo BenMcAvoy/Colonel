@@ -79,6 +79,50 @@ public:
 	static DWORD getPIDByName(std::string_view procName, bool useUMModuleEnum, uintptr_t* outBaseAddress = nullptr);
 	DriverStatus attachToProcess(std::string_view procName, bool useUMModuleEnum = false, uintptr_t* outBaseAddress = nullptr) const;
 
+	template <Addressable U>
+	void read(U address, uint8_t* outData, size_t bytesToRead, DriverStatus* outStatus = nullptr) {
+		if (!hDriver_) {
+			if (outStatus) *outStatus = DriverStatus::NotInitialized;
+			throw DriverException(DriverStatus::NotInitialized, 
+				"Driver not initialized - cannot perform read operation"); 
+		}
+		Info_t info{};
+		if constexpr (std::is_pointer_v<U>) {
+			info.targetAddress = reinterpret_cast<UINT64>(address);
+		} else {
+			info.targetAddress = static_cast<UINT64>(address);
+		}
+		info.bufferAddress = reinterpret_cast<UINT64>(outData);
+		info.bytesToRead = bytesToRead;
+		info.bytesRead = 0;
+		
+		DWORD bytesReturned = 0;
+		BOOL result = DeviceIoControl(
+			hDriver_,
+			READCODE,
+			&info,
+			sizeof(Info_t),
+			&info,
+			sizeof(Info_t),
+			&bytesReturned,
+			NULL
+		);
+		
+		if (!result) {
+			DWORD error = GetLastError();
+			if (outStatus) *outStatus = DriverStatus::ReadFailed;
+			throw DriverException(DriverStatus::ReadFailed,
+				std::format("DeviceIoControl failed with error code: {} (0x{:X})", error, error));
+		}
+		else if (info.bytesRead != bytesToRead) {
+			if (outStatus) *outStatus = DriverStatus::ReadPartial;
+			throw DriverException(DriverStatus::ReadPartial,
+				std::format("Partial read: expected {} bytes, got {} bytes", bytesToRead, info.bytesRead));
+		}
+		
+		if (outStatus) *outStatus = DriverStatus::Success;
+	}
+
 	template <typename T, Addressable U>
 	T read(U address, DriverStatus* outStatus = nullptr) {
 		if (!hDriver_) {
