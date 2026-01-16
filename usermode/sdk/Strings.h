@@ -41,6 +41,9 @@ namespace SDK {
         FName(uint32_t comparisonIndex, uint32_t number)
 			: ComparisonIndex(comparisonIndex), Number(number) {
 		}
+        FName(uint32_t comparisonIndex)
+			: ComparisonIndex(comparisonIndex), Number(0) {
+		}
 
         std::string ToString() const {
             uint32_t chunkOffset = ComparisonIndex >> 16;

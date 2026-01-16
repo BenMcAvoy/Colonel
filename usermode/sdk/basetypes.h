@@ -68,7 +68,12 @@ namespace SDK {
 	};
 
     struct FMatrix {
-        float M[4][4];
+        float M[4][4] = {
+            { 0.0, 0.0, 0.0, 0.0 },
+            { 0.0, 0.0, 0.0, 0.0 },
+            { 0.0, 0.0, 0.0, 0.0 },
+            { 0.0, 0.0, 0.0, 0.0 },
+        };
 
         FMatrix() {
             for (int i = 0; i < 4; ++i) {
@@ -108,10 +113,10 @@ namespace SDK {
             return result;
         }
 
-        explicit FMatrix(class FRotator& Rot) {
-            const float RadPitch = Rot.Pitch * 3.14159265f / 180.0f;
-            const float RadYaw = Rot.Yaw * 3.14159265f / 180.0f;
-            const float RadRoll = Rot.Roll * 3.14159265 / 180.0f;
+        explicit FMatrix(FRotator& Rot) {
+            float RadPitch = Rot.Pitch * 3.14159265f / 180.0f;
+            float RadYaw = Rot.Yaw * 3.14159265f / 180.0f;
+            float RadRoll = Rot.Roll * 3.14159265f / 180.0f;
 
             const float SP = std::sin(RadPitch);
             const float CP = std::cos(RadPitch);
@@ -142,6 +147,65 @@ namespace SDK {
         }
     };
 
+    struct FTransform {
+        FQuat Rotation;
+        FVector Translation;
+        char pad_0x01C[0x4];
+        FVector Scale3D;
+        char pad_0x02C[0x4];
+
+        FMatrix ToMatrix() const {
+            FMatrix matrix{};
+
+            matrix.M[3][0] = Translation.X;
+            matrix.M[3][1] = Translation.Y;
+            matrix.M[3][2] = Translation.Z;
+
+            const float x2 = Rotation.X + Rotation.X;
+            const float y2 = Rotation.Y + Rotation.Y;
+            const float z2 = Rotation.Z + Rotation.Z;
+
+            const float xx2 = Rotation.X * x2;
+            const float yy2 = Rotation.Y * y2;
+            const float zz2 = Rotation.Z * z2;
+
+            matrix.M[0][0] = (1.0f - (yy2 + zz2)) * Scale3D.X;
+            matrix.M[1][1] = (1.0f - (xx2 + zz2)) * Scale3D.Y;
+            matrix.M[2][2] = (1.0f - (xx2 + yy2)) * Scale3D.Z;
+
+            const float yz2 = Rotation.Y * z2;
+            const float wx2 = Rotation.W * x2;
+            matrix.M[2][1] = (yz2 - wx2) * Scale3D.Z;
+            matrix.M[1][2] = (yz2 + wx2) * Scale3D.Y;
+
+            const float xy2 = Rotation.X * y2;
+            const float wz2 = Rotation.W * z2;
+            matrix.M[1][0] = (xy2 - wz2) * Scale3D.X;
+            matrix.M[0][1] = (xy2 + wz2) * Scale3D.Y;
+
+            const float xz2 = Rotation.X * z2;
+            const float wy2 = Rotation.W * y2;
+            matrix.M[2][0] = (xz2 + wy2) * Scale3D.X;
+            matrix.M[0][2] = (xz2 - wy2) * Scale3D.Z;
+
+            matrix.M[0][3] = 0.0f;
+            matrix.M[1][3] = 0.0f;
+            matrix.M[2][3] = 0.0f;
+            matrix.M[3][3] = 1.0f;
+
+            return matrix;
+        }
+
+        std::string Tostring() const {
+            return std::format(
+                "FTransform(Rotation: {}, Translation: {}, Scale3D: {})",
+                Rotation.ToString(),
+                Translation.ToString(),
+                Scale3D.ToString()
+            );
+		}
+    };
+
     template <typename T>
     class TArray {
     public:
@@ -153,7 +217,13 @@ namespace SDK {
 
         T operator[](int32_t index) const {
             if (index < 0 || index >= Count) {
-                throw std::out_of_range("TArray index out of range");
+                std::string msg = std::format(
+                    "TArray index out of range: index {}, count {}",
+                    index,
+                    Count
+				);
+
+				throw std::out_of_range(msg);
             }
 
 			return SDK::dm.read<T>(Data + index);
@@ -190,5 +260,166 @@ namespace SDK {
         T* Data;
         int32_t Count;
         int32_t Max;
+    };
+
+	// A TMap is just a std::unordered_map under the hood in Unreal Engine 4+ (TMap : public std::unordered_map)
+
+    template <typename K, typename V>
+    struct TPair {
+        K First;
+        V Second;
+    };
+    	
+	template <typename SetType>
+    class SetElement {
+    private:
+        template<typename SetDataType>
+        friend class TSet;
+
+    private:
+        SetType Value;
+        int32_t HashNextId;
+        int32_t HashIndex;
+    };
+
+    template <typename T>
+    union TSparseArrayData {
+        T ElementData;
+        struct {
+            int32_t PrevFreeIndex;
+			int32_t NextFreeIndex;
+        };
+    };
+
+    template<int32_t Size, uint32_t Alignment>
+    struct TAlignedBytes {
+        alignas(Alignment) uint8_t Pad[Size];
+    };
+
+	template <uint32_t NumInlineElements>
+    class TInlineAllocator {
+    public:
+        template <typename T>
+        class ForElementT {
+        private:
+			static constexpr uint32_t ElementSize = sizeof(T);
+			static constexpr uint32_t ElementAlign = alignof(T);
+
+			static constexpr int32_t InlineDataBytes = NumInlineElements * ElementSize;
+
+        private:
+			TAlignedBytes<ElementSize, ElementAlign> InlineData[NumInlineElements];
+            T* SecondaryData;
+
+        public:
+            inline const T* GetAllocation() const {
+                if (SecondaryData) {
+                    return SecondaryData;
+                }
+                return reinterpret_cast<const T*>(InlineData);
+            }
+
+            inline uint32_t GetNumInlineBytes() const {
+                return InlineDataBytes;
+			}
+        };
+    };
+
+    class FBitArray {
+    protected:
+        static constexpr int32_t NumBitsPerDWORD = 32;
+		static constexpr int32_t NumBitsPerDWORDLog2 = 5;
+
+    private:
+        TInlineAllocator<4>::ForElementT<int32_t> Data;
+        int32_t NumBits;
+        int32_t MaxBits;
+
+    public:
+        inline const uint32_t* GetData() const {
+            return reinterpret_cast<const uint32_t*>(Data.GetAllocation());
+		}
+
+        inline bool IsValid() const {
+			return GetData() && NumBits > 0;
+		}
+    };
+
+    template <typename T>
+    class TSparseArray {
+    private:
+		static constexpr uint32_t ElementAlign = alignof(T);
+		static constexpr uint32_t ElementSize = sizeof(T);
+
+    private:
+		using Datatype = TSparseArrayData<TAlignedBytes<ElementSize, ElementAlign>>;
+
+    private:
+        TArray<Datatype> Data;
+        FBitArray AllocationFlags;
+        int32_t FirstFreeIndex;
+		int32_t NumFreeIndices;
+
+    public:
+        bool IsValid() const {
+            return Data.Data != nullptr && AllocationFlags.IsValid();
+        }
+
+        inline int32_t Num() const {
+            return Data.Count - NumFreeIndices;
+		}
+
+        inline int32_t Max() const {
+            return Data.Max;
+        }
+    };
+
+    template <typename T>
+    class TSet {
+    private:
+		static constexpr uint32_t ElementAlign = alignof(T);
+		static constexpr uint32_t ElementSize = sizeof(T);
+
+    private:
+        using SetDataType = SetElement<T>;
+		using HashType = TInlineAllocator<1>::ForElementT<SetDataType>;
+
+    private:
+        TSparseArray<SetDataType> Elements;
+        HashType Hash;
+		int32_t HashSize;
+
+    public:
+        int32_t Num() const {
+            return Elements.Num();
+        }
+
+        int32_t Max() const {
+            return Elements.Max();
+		}
+
+        bool IsValid() const {
+            return Elements.IsValid();
+		}
+    };
+
+    template <typename K, typename V>
+    class TMap {
+    private:
+		using ElementType = TPair<K, V>;
+        TSet<ElementType> Elements;
+
+    public:
+        int32_t Num() const {
+            return Elements.Num();
+		}
+
+        int32_t Max() const {
+            return Elements.Max();
+        }
+
+        bool IsValid() const {
+            return Elements.IsValid();
+        }
     };
 }
