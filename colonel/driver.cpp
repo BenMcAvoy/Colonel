@@ -325,38 +325,47 @@ NTSTATUS Driver::WritePhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T
 }
 
 NTSTATUS Driver::HandleReadRequest(Info_t* buffer) {
-	if (!buffer) { // Handle null buffer
+	if (!buffer) {
 		LOG("ERROR: Buffer is NULL in READ request");
 		return STATUS_INVALID_PARAMETER;
 	}
 
-	if (!Driver::targetProcess) { // Handle no target process (user needs to call INIT first)
+	if (!Driver::targetProcess) {
 		LOG("ERROR: No target process attached in READ request");
 		return STATUS_INVALID_PARAMETER;
 	}
 
 	VirtualAddress& va = *reinterpret_cast<VirtualAddress*>(&buffer->targetAddress);
-	VOID* physAddress = TranslateVirtualToPhysical(va);
+	SIZE_T remaining = buffer->bytesToRead;
+	SIZE_T totalRead = 0;
+	UINT8* userBuffer = reinterpret_cast<UINT8*>(buffer->bufferAddress);
+	UINT64 currentVA = va.value;
 
-	LOG("READ VA 0x%llX at PA %p", va.value, physAddress);
+	while (remaining > 0) {
+		VOID* physAddress = TranslateVirtualToPhysical(*reinterpret_cast<VirtualAddress*>(&currentVA));
+		if (!physAddress) {
+			LOG("ERROR: Failed to translate VA 0x%llX", currentVA);
+			break;
+		}
 
-	// Prevent crossing page boundaries (this would cause issues)
-	// TODO: Handle multi-page reads/writes (we just read/write up to the page boundary for now)
-	ULONG64 finalSize = Min(PAGE_SIZE - ((INT64)physAddress & 0xFFF), (LONGLONG)buffer->bytesToRead);
-    SIZE_T bytesRead = NULL;
+		// Calculate how many bytes we can read in this page
+		SIZE_T offsetInPage = (UINT64)physAddress & 0xFFF;
+		SIZE_T chunkSize = min(PAGE_SIZE - offsetInPage, remaining);
+		SIZE_T bytesRead = 0;
 
-	if (finalSize != buffer->bytesToRead) {
-		LOG("WARNING: Read request crosses page boundary, limiting read size to %llu bytes", finalSize);
+		NTSTATUS res = ReadPhysicalMemory(physAddress, userBuffer, chunkSize, &bytesRead);
+		if (!NT_SUCCESS(res) || bytesRead == 0) {
+			LOG("ERROR: ReadPhysicalMemory failed at VA 0x%llX with status 0x%X", currentVA, res);
+			return res;
+		}
+
+		userBuffer += bytesRead;
+		currentVA += bytesRead;
+		remaining -= bytesRead;
+		totalRead += bytesRead;
 	}
 
-	// Read the physical memory into the user buffer
-	NTSTATUS res = ReadPhysicalMemory(PVOID(physAddress), buffer->bufferAddress, finalSize, &bytesRead);
-	if (!NT_SUCCESS(res)) {
-		LOG("ERROR: ReadPhysicalMemory failed in READ request with status 0x%X", res);
-		return res;
-	}
-
-	buffer->bytesRead = bytesRead;
+	buffer->bytesRead = totalRead;
 	return STATUS_SUCCESS;
 }
 
