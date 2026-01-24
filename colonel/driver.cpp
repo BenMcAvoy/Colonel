@@ -5,423 +5,632 @@
 
 using namespace Driver;
 
+#define GAF_ASYNC_KEYSTATE_RVA  0x24F8C0
+#define KEYSTATE_ARRAY_SIZE     0x400
+
+static PHYSICAL_ADDRESS g_KeyStatePhysAddr = {0};
+static BOOLEAN g_KeyStateCached = FALSE;
+
+typedef struct _KLDR_DATA_TABLE_ENTRY
+{
+    LIST_ENTRY InLoadOrderLinks;
+    LIST_ENTRY InMemoryOrderLinks;
+    LIST_ENTRY InInitializationOrderLinks;
+    PVOID DllBase;
+    PVOID EntryPoint;
+    ULONG SizeOfImage;
+    UNICODE_STRING FullDllName;
+    UNICODE_STRING BaseDllName;
+} KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
+
 #define INITIALIZE(fn) do { \
-	p##fn = KLI_FN(fn); \
-	LOG("KLI Cache - %s initialized at %p", __FUNCTION__, #fn, p##fn); \
+    p##fn = KLI_FN(fn); \
+    LOG("KLI Cache - %s initialized at %p", __FUNCTION__, #fn, p##fn); \
 } while(0)
 
-void KFNs::Initialize() {
-	INITIALIZE(DbgPrintEx);
-	INITIALIZE(IoCreateDevice);
-	INITIALIZE(IoCreateSymbolicLink);
-	INITIALIZE(IofCompleteRequest);
-	INITIALIZE(PsLookupProcessByProcessId);
-	INITIALIZE(MmCopyMemory);
-	INITIALIZE(MmMapIoSpace);
-	INITIALIZE(MmUnmapIoSpace);
-	INITIALIZE(IoCreateDriver);
-	INITIALIZE(DbgPrintEx);
-	INITIALIZE(RtlInitUnicodeString);
+NTSTATUS GetKernelModuleBase(
+    _In_ PCWSTR ModuleName,
+    _Out_ PVOID* OutBase,
+    _Out_opt_ PSIZE_T OutSize
+)
+{
+    if (!OutBase) return STATUS_INVALID_PARAMETER;
+
+    *OutBase = nullptr;
+    if (OutSize) *OutSize = 0;
+
+    if (!KFNs::pPsLoadedModuleList)
+    {
+        LOG("PsLoadedModuleList not resolved");
+        return STATUS_NOT_FOUND;
+    }
+
+    UNICODE_STRING targetName;
+    RtlInitUnicodeString(&targetName, ModuleName);
+
+    PLIST_ENTRY current = KFNs::pPsLoadedModuleList->Flink;
+
+    while (current != KFNs::pPsLoadedModuleList)
+    {
+        PKLDR_DATA_TABLE_ENTRY entry = CONTAINING_RECORD(
+            current,
+            KLDR_DATA_TABLE_ENTRY,
+            InLoadOrderLinks
+        );
+
+        if (RtlEqualUnicodeString(&entry->BaseDllName, &targetName, TRUE))
+        {
+            *OutBase = entry->DllBase;
+            if (OutSize) *OutSize = entry->SizeOfImage;
+            LOG("Found module %ws at %p (size 0x%X)", ModuleName, *OutBase, entry->SizeOfImage);
+            return STATUS_SUCCESS;
+        }
+
+        current = current->Flink;
+    }
+
+    LOG("Module %ws not found in PsLoadedModuleList", ModuleName);
+    return STATUS_NOT_FOUND;
 }
 
-NTSTATUS Driver::HandleUnsupportedIO(PDEVICE_OBJECT pDeviceObj, PIRP irp) {
-	UNREFERENCED_PARAMETER(pDeviceObj);
-	
-	// Return not supported for all unsupported IOCTLs
-	irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
-	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
-	return irp->IoStatus.Status;
+typedef struct _IMAGE_NT_HEADERS64
+{
+    ULONG Signature;
+    kli::detail::IMAGE_FILE_HEADER FileHeader;
+    kli::detail::IMAGE_OPTIONAL_HEADER64 OptionalHeader;
+} IMAGE_NT_HEADERS64, *PIMAGE_NT_HEADERS64;
+
+NTSTATUS FindExportByName(
+    _In_ PVOID ModuleBase,
+    _In_ const char* ExportName, // e.g. "_GetAsyncKeyState"
+    _Out_ PVOID* OutFunctionAddress
+)
+{
+    *OutFunctionAddress = nullptr;
+
+    if (!ModuleBase || !ExportName) return STATUS_INVALID_PARAMETER;
+
+    kli::detail::PIMAGE_DOS_HEADER dos = static_cast<kli::detail::PIMAGE_DOS_HEADER>(ModuleBase);
+    if (dos->e_magic != kli::detail::IMAGE_DOS_SIGNATURE)
+    {
+        LOG("Invalid DOS header");
+        return STATUS_INVALID_IMAGE_FORMAT;
+    }
+
+    PIMAGE_NT_HEADERS nt = reinterpret_cast<PIMAGE_NT_HEADERS>(static_cast<PUCHAR>(ModuleBase) + dos->e_lfanew);
+    if (nt->Signature != kli::detail::IMAGE_NT_SIGNATURE)
+    {
+        LOG("Invalid NT header");
+        return STATUS_INVALID_IMAGE_FORMAT;
+    }
+
+    kli::detail::PIMAGE_DATA_DIRECTORY expDir = &nt->OptionalHeader.DataDirectory[
+        kli::detail::IMAGE_DIRECTORY_ENTRY_EXPORT];
+    if (expDir->VirtualAddress == 0 || expDir->Size == 0)
+    {
+        LOG("Module has no export directory");
+        return STATUS_NOT_FOUND;
+    }
+
+    kli::detail::PIMAGE_EXPORT_DIRECTORY expDesc = (kli::detail::PIMAGE_EXPORT_DIRECTORY)(
+        static_cast<PUCHAR>(ModuleBase) + expDir->VirtualAddress
+    );
+
+    if (expDesc->NumberOfNames == 0 || expDesc->AddressOfNames == 0)
+    {
+        LOG("No export names present");
+        return STATUS_NOT_FOUND;
+    }
+
+    ULONG* nameRvas = (ULONG*)(static_cast<PUCHAR>(ModuleBase) + expDesc->AddressOfNames);
+    USHORT* ordinals = (USHORT*)(static_cast<PUCHAR>(ModuleBase) + expDesc->AddressOfNameOrdinals);
+    ULONG* functions = (ULONG*)(static_cast<PUCHAR>(ModuleBase) + expDesc->AddressOfFunctions);
+
+    for (ULONG i = 0; i < expDesc->NumberOfNames; i++)
+    {
+        const char* name = (const char*)(static_cast<PUCHAR>(ModuleBase) + nameRvas[i]);
+
+        if (strcmp(name, ExportName) == 0)
+        {
+            USHORT ordinal = ordinals[i];
+            ULONG rva = functions[ordinal];
+
+            *OutFunctionAddress = static_cast<PVOID>((PUCHAR)ModuleBase + rva);
+            LOG("Found export '%s' → ordinal %hu, RVA 0x%X, VA %p",
+                ExportName, ordinal, rva, *OutFunctionAddress);
+            return STATUS_SUCCESS;
+        }
+    }
+
+    LOG("Export '%s' not found in export table", ExportName);
+    return STATUS_NOT_FOUND;
 }
 
-NTSTATUS Driver::HandleCreateIO(PDEVICE_OBJECT pDeviceObj, PIRP irp) {
-	UNREFERENCED_PARAMETER(pDeviceObj);
+void KFNs::Initialize()
+{
+    INITIALIZE(DbgPrintEx);
+    INITIALIZE(IoCreateDevice);
+    INITIALIZE(IoCreateSymbolicLink);
+    INITIALIZE(IofCompleteRequest);
+    INITIALIZE(PsLookupProcessByProcessId);
+    INITIALIZE(MmCopyMemory);
+    INITIALIZE(MmMapIoSpace);
+    INITIALIZE(MmUnmapIoSpace);
+    INITIALIZE(IoCreateDriver);
+    INITIALIZE(RtlInitUnicodeString);
 
-	// Simply acknowledge the create request
-	LOG("CreateIO called. Device opened");
-	irp->IoStatus.Status = STATUS_SUCCESS;
-	irp->IoStatus.Information = 0;
-	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
-	return irp->IoStatus.Status;
+    UNICODE_STRING listName;
+    RtlInitUnicodeString(&listName, L"PsLoadedModuleList");
+    pPsLoadedModuleList = reinterpret_cast<PLIST_ENTRY>(
+        MmGetSystemRoutineAddress(&listName)
+    );
+
+    if (pPsLoadedModuleList)
+        LOG("PsLoadedModuleList resolved → %p", pPsLoadedModuleList);
+    else
+        LOG("Failed to resolve PsLoadedModuleList");
+
+    PVOID win32kBase = nullptr;
+    SIZE_T modSize = 0;
+
+    NTSTATUS status = GetKernelModuleBase(L"win32kbase.sys", &win32kBase, &modSize);
+    if (!NT_SUCCESS(status))
+    {
+        LOG("Failed to find win32kbase.sys");
+        return;
+    }
+
+    LOG("win32kbase.sys base: %p  size: 0x%zx", win32kBase, modSize);
+
+    PVOID funcAddr = nullptr;
+    status = FindExportByName(win32kBase, "_GetAsyncKeyState", &funcAddr);
+
+    if (NT_SUCCESS(status) && funcAddr)
+    {
+        pGetAsyncKeyState = static_cast<GetAsyncKeyState_t>(funcAddr);
+        LOG("_GetAsyncKeyState found in export table at %p", pGetAsyncKeyState);
+    }
+    else LOG("Could not find '_GetAsyncKeyState' in export table (status 0x%X)", status);
 }
 
-NTSTATUS Driver::HandleCloseIO(PDEVICE_OBJECT pDeviceObj, PIRP irp) {
-	UNREFERENCED_PARAMETER(pDeviceObj);
-
-	// Simply acknowledge the close request
-	LOG("CloseIO called. Device closed");
-	irp->IoStatus.Status = STATUS_SUCCESS;
-	irp->IoStatus.Information = 0;
-	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
-	return irp->IoStatus.Status;
+NTSTATUS Driver::HandleUnsupportedIO(PDEVICE_OBJECT pDeviceObj, PIRP irp)
+{
+    UNREFERENCED_PARAMETER(pDeviceObj);
+    irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
+    KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
+    return irp->IoStatus.Status;
 }
 
-NTSTATUS NTAPI Driver::MainEntryPoint(PDRIVER_OBJECT pDriver, PUNICODE_STRING regPath) {
-	UNREFERENCED_PARAMETER(regPath);
-
-	PDEVICE_OBJECT pDevObj = nullptr;
-
-	// Create device and symbolic link strings
-	auto devName = INIT_USTRING(L"\\Device\\colonelDevice");
-	auto symLink = INIT_USTRING(L"\\??\\colonelLink");
-	auto symLinkGlobal = INIT_USTRING(L"\\DosDevices\\Global\\colonelLink");
-
-	// Create device so that we have a real pDevObj to work with
-	LOG("Creating device: \\Device\\colonelDevice");
-	auto status = KFNs::pIoCreateDevice(pDriver, 0, &devName, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &pDevObj);
-	if (!NT_SUCCESS(status)) {
-		LOG("ERROR: IoCreateDevice failed with status 0x%X", status);
-		return status;
-	}
-
-	// Create symbolic links for user-mode access
-	LOG("Creating symbolic link: \\??\\colonelLink");
-	status = KFNs::pIoCreateSymbolicLink(&symLink, &devName);
-	if (!NT_SUCCESS(status)) {
-		LOG("ERROR: IoCreateSymbolicLink(\\??) failed with status 0x%X", status);
-		return status;
-	}
-
-	// Create symbolic link in the global namespace (also for user-mode access)
-	LOG("Creating symbolic link: \\DosDevices\\Global\\colonelLink");
-	NTSTATUS statusGlobal = KFNs::pIoCreateSymbolicLink(&symLinkGlobal, &devName);
-	if (!NT_SUCCESS(statusGlobal)) {
-		LOG("ERROR: IoCreateSymbolicLink(\\DosDevices\\Global) failed with status 0x%X", statusGlobal);
-		return statusGlobal;
-	}
-
-	// Enable buffered, this means that the I/O manager will allocate a system buffer for each I/O request
-	SetFlag(pDevObj->Flags, DO_BUFFERED_IO);
-
-	// Set all to unsupported (we manually set the ones we support below)
-	for (int i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
-		pDriver->MajorFunction[i] = Driver::HandleUnsupportedIO;
-
-	// Set supported function callbacks
-	pDriver->MajorFunction[IRP_MJ_DEVICE_CONTROL] = Driver::HandleIORequest;
-	pDriver->MajorFunction[IRP_MJ_CREATE] = Driver::HandleCreateIO;
-	pDriver->MajorFunction[IRP_MJ_CLOSE] = Driver::HandleCloseIO;
-	pDriver->DriverUnload = NULL; // Unsupported
-
-	// Finalize initialization
-	ClearFlag(pDevObj->Flags, DO_DEVICE_INITIALIZING);
-	LOG("Driver initialization completed successfully");
-
-	return STATUS_SUCCESS;
+NTSTATUS Driver::HandleCreateIO(PDEVICE_OBJECT pDeviceObj, PIRP irp)
+{
+    UNREFERENCED_PARAMETER(pDeviceObj);
+    LOG("CreateIO called. Device opened");
+    irp->IoStatus.Status = STATUS_SUCCESS;
+    irp->IoStatus.Information = 0;
+    KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
+    return irp->IoStatus.Status;
 }
 
-NTSTATUS Driver::HandleIORequest(PDEVICE_OBJECT pDev, PIRP irp) {
-	UNREFERENCED_PARAMETER(pDev);
-
-	irp->IoStatus.Information = sizeof(Driver::Info_t);
-
-	// Get the current stack location and the system buffer
-	// The stack location contains the IOCTL code and other parameters
-	// The buffer contains the data sent from user-mode and where we write data back
-	auto stack = IoGetCurrentIrpStackLocation(irp);
-	auto buffer = (Driver::Info_t*)irp->AssociatedIrp.SystemBuffer;
-	auto ctlCode = stack->Parameters.DeviceIoControl.IoControlCode;
-
-	if (!stack) { // Handle non-existent stack
-		LOG("ERROR: Stack is NULL");
-
-		irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
-		KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
-
-		return STATUS_INVALID_PARAMETER;
-	}
-
-	// Use the requested handler
-	NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
-	switch (ctlCode) {
-	case Codes::READCODE:
-		status = HandleReadRequest(buffer);
-		break;
-	case Codes::WRITECODE:
-		status = HandleWriteRequest(buffer);
-		break;
-	case Codes::INITCODE:
-		status = HandleInitRequest(buffer);
-		break;
-	case Codes::GETBASECODE:
-		status = HandleGetBaseRequest(buffer);
-		break;
-	}
-
-	// Complete the request
-	irp->IoStatus.Status = status;
-	KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
-
-	return status;
+NTSTATUS Driver::HandleCloseIO(PDEVICE_OBJECT pDeviceObj, PIRP irp)
+{
+    UNREFERENCED_PARAMETER(pDeviceObj);
+    LOG("CloseIO called. Device closed");
+    irp->IoStatus.Status = STATUS_SUCCESS;
+    irp->IoStatus.Information = 0;
+    KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
+    return irp->IoStatus.Status;
 }
 
-NTSTATUS Driver::HandleInitRequest(Info_t* buffer) {
-	if (!buffer) { // Handle null buffer
-		LOG("ERROR: Buffer is NULL in INIT request");
-		return STATUS_INVALID_PARAMETER;
-	}
+NTSTATUS NTAPI Driver::MainEntryPoint(PDRIVER_OBJECT pDriver, PUNICODE_STRING regPath)
+{
+    UNREFERENCED_PARAMETER(regPath);
 
-	// Lookup the target process by its PID, this gives us a PEPROCESS
-	NTSTATUS getProcessStatus = KFNs::pPsLookupProcessByProcessId(buffer->processId, &Driver::targetProcess);
+    PDEVICE_OBJECT pDevObj = nullptr;
 
-	if (!NT_SUCCESS(getProcessStatus)) { // Handle lookup failure
-		LOG("ERROR: GetProcessByName failed with status 0x%X", getProcessStatus);
-		Driver::targetProcess = nullptr;
-		return getProcessStatus;
-	}
+    auto devName = INIT_USTRING(L"\\Device\\colonelDevice");
+    auto symLink = INIT_USTRING(L"\\??\\colonelLink");
+    auto symLinkGlobal = INIT_USTRING(L"\\DosDevices\\Global\\colonelLink");
 
-	LOG("Successfully set target process to PID %llu", buffer->processId);
+    LOG("Creating device: \\Device\\colonelDevice");
+    auto status = KFNs::pIoCreateDevice(pDriver, 0, &devName, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE,
+                                        &pDevObj);
+    if (!NT_SUCCESS(status))
+    {
+        LOG("ERROR: IoCreateDevice failed with status 0x%X", status);
+        return status;
+    }
 
-	return STATUS_SUCCESS;
+    LOG("Creating symbolic link: \\??\\colonelLink");
+    status = KFNs::pIoCreateSymbolicLink(&symLink, &devName);
+    if (!NT_SUCCESS(status))
+    {
+        LOG("ERROR: IoCreateSymbolicLink(\\??) failed with status 0x%X", status);
+        return status;
+    }
+
+    LOG("Creating symbolic link: \\DosDevices\\Global\\colonelLink");
+    NTSTATUS statusGlobal = KFNs::pIoCreateSymbolicLink(&symLinkGlobal, &devName);
+    if (!NT_SUCCESS(statusGlobal))
+    {
+        LOG("ERROR: IoCreateSymbolicLink(\\DosDevices\\Global) failed with status 0x%X", statusGlobal);
+        return statusGlobal;
+    }
+
+    SetFlag(pDevObj->Flags, DO_BUFFERED_IO);
+
+    for (int i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
+        pDriver->MajorFunction[i] = Driver::HandleUnsupportedIO;
+
+    pDriver->MajorFunction[IRP_MJ_DEVICE_CONTROL] = Driver::HandleIORequest;
+    pDriver->MajorFunction[IRP_MJ_CREATE] = Driver::HandleCreateIO;
+    pDriver->MajorFunction[IRP_MJ_CLOSE] = Driver::HandleCloseIO;
+    pDriver->DriverUnload = NULL;
+
+    ClearFlag(pDevObj->Flags, DO_DEVICE_INITIALIZING);
+    LOG("Driver initialization completed successfully");
+
+    return STATUS_SUCCESS;
 }
 
-UINT64 Driver::GetPML4Base() {
-	constexpr UINT64 DirBaseOffset = 0x28;
+NTSTATUS Driver::ReadKeyState(ULONG vkCode, PBOOLEAN isDown)
+{
+    *isDown = FALSE;
 
-	auto dirBase = *reinterpret_cast<ULONG64*>(
-		reinterpret_cast<UINT64>(Driver::targetProcess) + DirBaseOffset
-	);
+    if (vkCode >= 0x100) return STATUS_INVALID_PARAMETER;
 
-	return dirBase;
+    if (!targetProcess)
+    {
+        LOG("No target process attached");
+        return STATUS_NOT_FOUND;
+    }
+
+    SHORT state = KFNs::pGetAsyncKeyState(vkCode);
+    *isDown = (state & 0x8000) != 0;
+
+    LOG("_GetAsyncKeyState(0x%X) → 0x%04X (pressed = %d)", vkCode, state, *isDown);
+
+    return STATUS_SUCCESS;
 }
 
-PVOID Driver::TranslateVirtualToPhysical(VirtualAddress va) {
-	// Extract indices and offset from the virtual address
-	const auto pml4Index = va.parts.pml4_index;
-	const auto pdptIndex = va.parts.pdpt_index;
-	const auto pdIndex = va.parts.pd_index;
-	const auto ptIndex = va.parts.pt_index;
-	const auto pageOffset = va.parts.offset;
+NTSTATUS Driver::HandleIORequest(PDEVICE_OBJECT pDev, PIRP irp)
+{
+    UNREFERENCED_PARAMETER(pDev);
 
-	// Used for every ReadPhysicalMemory call
-	// We simply reuse the same variable
-	SIZE_T bytesRead{};
+    irp->IoStatus.Information = sizeof(Driver::Info_t);
 
-	// The PML4 base address in physical memory
-	// We use this to walk the page table hierarchy
-	ULONG64 pml4PhysBase = GetPML4Base();
+    auto stack = IoGetCurrentIrpStackLocation(irp);
+    auto buffer = static_cast<Driver::Info_t*>(irp->AssociatedIrp.SystemBuffer);
+    auto ctlCode = stack->Parameters.DeviceIoControl.IoControlCode;
 
-	// First, we read the PML4 entry
-	// This will point us to the PDPT table
-	// We use `pml4Index` to get the correct entry
-	PTE pml4e{};
-	{
-		NTSTATUS st = ReadPhysicalMemory(
-			reinterpret_cast<PVOID>(pml4PhysBase + (pml4Index * sizeof(UINT64))),
-			&pml4e,
-			sizeof(UINT64),
-			&bytesRead);
+    if (!stack)
+    {
+        LOG("ERROR: Stack is NULL");
+        irp->IoStatus.Status = STATUS_INVALID_PARAMETER;
+        KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
+        return STATUS_INVALID_PARAMETER;
+    }
 
-		if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pml4e.parts.present) {
-			LOG("PML4 entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
-			return nullptr;
-		}
-	}
+    NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
+    switch (ctlCode)
+    {
+    case Codes::READCODE:
+        status = HandleReadRequest(buffer);
+        break;
+    case Codes::WRITECODE:
+        status = HandleWriteRequest(buffer);
+        break;
+    case Codes::INITCODE:
+        status = HandleInitRequest(buffer);
+        break;
+    case Codes::GETBASECODE:
+        status = HandleGetBaseRequest(buffer);
+        break;
+    case Codes::KEYSTATECODE:
+        if (buffer && buffer->key <= 0xFF)
+        {
+            LOG("HandleIORequest: KEYSTATECODE request for VK 0x%X", buffer->key);
+            BOOLEAN down = FALSE;
+            status = ReadKeyState(buffer->key, &down);
+            if (NT_SUCCESS(status))
+            {
+                buffer->isDown = down;
+            }
+            else
+            {
+                LOG("HandleIORequest: KEYSTATECODE failed - status 0x%X", status);
+            }
+        }
+        else
+        {
+            LOG("HandleIORequest: KEYSTATECODE invalid parameter (key = 0x%X)",
+                buffer ? buffer->key : 0);
+            status = STATUS_INVALID_PARAMETER;
+        }
+        break;
+    }
 
-	// Next, we read the PDPT entry
-	// This will point us to the PD table
-	// We use `pdptIndex` to get the correct entry
-	PTE pdpte{};
-	{
-		NTSTATUS st = ReadPhysicalMemory(
-			reinterpret_cast<PVOID>((pml4e.parts.physBase << 12) + (pdptIndex * sizeof(UINT64))),
-			&pdpte,
-			sizeof(UINT64),
-			&bytesRead);
+    irp->IoStatus.Status = status;
+    KFNs::pIofCompleteRequest(irp, IO_NO_INCREMENT);
 
-		if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pdpte.parts.present) {
-			LOG("PDPT entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
-			return nullptr;
-		}
-	}
-
-	// Handle 1 GiB pages (PS bit in PDPTE)
-	// If this is a 1 GiB page, we can directly calculate the physical address
-	// without going further down the page table hierarchy
-	if (pdpte.parts.pageSize) {
-		const auto physBase = (pdpte.parts.physBase << 12);
-		const auto bigPageOffset = va.value & ((1ull << 30) - 1); // lower 30 bits
-
-		return reinterpret_cast<PVOID>(physBase + bigPageOffset);
-	}
-
-	// Next, we read the PD entry
-	// This will point us to the PT table
-	// We use `pdIndex` to get the correct entry
-	PTE pde{};
-	{
-		NTSTATUS st = ReadPhysicalMemory(
-			reinterpret_cast<PVOID>((pdpte.parts.physBase << 12) + (pdIndex * sizeof(UINT64))),
-			&pde,
-			sizeof(UINT64),
-			&bytesRead);
-
-		if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pde.parts.present) {
-			LOG("PD entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
-			return nullptr;
-		}
-	}
-
-	// Handle 2 MiB pages (PS bit in PDE)
-	// If this is a 2 MiB page, we can directly calculate the physical address
-	// without going further down the page table hierarchy
-	if (pde.parts.pageSize) {
-		const auto physBase = (pde.parts.physBase << 12);
-		const auto largePageOffset = va.value & ((1ull << 21) - 1); // lower 21 bits
-		return reinterpret_cast<PVOID>(physBase + largePageOffset);
-	}
-
-	// Finally, we read the PT entry
-	// This will point us to the actual physical page
-	// We use `ptIndex` to get the correct entry
-	PTE pte{};
-	{
-		NTSTATUS st = ReadPhysicalMemory(
-			reinterpret_cast<PVOID>((pde.parts.physBase << 12) + (ptIndex * sizeof(UINT64))),
-			&pte,
-			sizeof(UINT64),
-			&bytesRead);
-
-		if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pte.parts.present) {
-			LOG("PT entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
-			return nullptr;
-		}
-	}
-
-	// Calculate the final physical address
-	// This is done by combining the physical page base address
-	// with the page offset from the original virtual address
-	const auto phys = (pte.parts.physBase << 12) + pageOffset;
-
-	return reinterpret_cast<PVOID>(phys);
+    return status;
 }
 
-NTSTATUS Driver::ReadPhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesRead) {
-	MM_COPY_ADDRESS fromAddress{};
-	fromAddress.PhysicalAddress.QuadPart = reinterpret_cast<UINT64>(physicalAddress);
-	return KFNs::pMmCopyMemory(buffer, fromAddress, size, MM_COPY_MEMORY_PHYSICAL, bytesRead);
+NTSTATUS Driver::HandleInitRequest(Info_t* buffer)
+{
+    if (!buffer)
+    {
+        LOG("ERROR: Buffer is NULL in INIT request");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    NTSTATUS getProcessStatus = KFNs::pPsLookupProcessByProcessId(buffer->processId, &Driver::targetProcess);
+
+    if (!NT_SUCCESS(getProcessStatus))
+    {
+        LOG("ERROR: PsLookupProcessByProcessId failed with status 0x%X", getProcessStatus);
+        Driver::targetProcess = nullptr;
+        return getProcessStatus;
+    }
+
+    LOG("Successfully set target process to PID %llu", buffer->processId);
+
+    return STATUS_SUCCESS;
 }
 
-NTSTATUS Driver::WritePhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesWritten) {
-	PHYSICAL_ADDRESS physAddr{};
-	physAddr.QuadPart = reinterpret_cast<UINT64>(physicalAddress);
+UINT64 Driver::GetPML4Base()
+{
+    constexpr UINT64 DirBaseOffset = 0x28;
 
-	// To write, we first map the physical memory into our address space
-	// This is because we cannot directly write to physical memory
-	VOID* mappedAddress = KFNs::pMmMapIoSpace(physAddr, size, MmNonCached);
+    auto dirBase = *reinterpret_cast<ULONG64*>(
+        reinterpret_cast<UINT64>(Driver::targetProcess) + DirBaseOffset
+    );
 
-	if (!mappedAddress) { // Handle mapping failure
-		LOG("ERROR: MmMapIoSpace failed in WRITE request");
-		return STATUS_INSUFFICIENT_RESOURCES;
-	}
-
-	// Now we can copy the data from our buffer to the mapped physical memory
-	RtlCopyMemory(mappedAddress, buffer, size);
-
-	// Unmap the physical memory from our address space
-	KFNs::pMmUnmapIoSpace(mappedAddress, size);
-
-	if (bytesWritten) *bytesWritten = size;
-	return STATUS_SUCCESS;
+    return dirBase;
 }
 
-NTSTATUS Driver::HandleReadRequest(Info_t* buffer) {
-	if (!buffer) {
-		LOG("ERROR: Buffer is NULL in READ request");
-		return STATUS_INVALID_PARAMETER;
-	}
+PVOID Driver::TranslateVirtualToPhysical(VirtualAddress va)
+{
+    const auto pml4Index = va.parts.pml4_index;
+    const auto pdptIndex = va.parts.pdpt_index;
+    const auto pdIndex = va.parts.pd_index;
+    const auto ptIndex = va.parts.pt_index;
+    const auto pageOffset = va.parts.offset;
 
-	if (!Driver::targetProcess) {
-		LOG("ERROR: No target process attached in READ request");
-		return STATUS_INVALID_PARAMETER;
-	}
+    SIZE_T bytesRead{};
 
-	VirtualAddress& va = *reinterpret_cast<VirtualAddress*>(&buffer->targetAddress);
-	SIZE_T remaining = buffer->bytesToRead;
-	SIZE_T totalRead = 0;
-	UINT8* userBuffer = reinterpret_cast<UINT8*>(buffer->bufferAddress);
-	UINT64 currentVA = va.value;
+    ULONG64 pml4PhysBase = GetPML4Base();
 
-	while (remaining > 0) {
-		VOID* physAddress = TranslateVirtualToPhysical(*reinterpret_cast<VirtualAddress*>(&currentVA));
-		if (!physAddress) {
-			LOG("ERROR: Failed to translate VA 0x%llX", currentVA);
-			break;
-		}
+    PTE pml4e{};
+    {
+        NTSTATUS st = ReadPhysicalMemory(
+            reinterpret_cast<PVOID>(pml4PhysBase + pml4Index * sizeof(UINT64)),
+            &pml4e,
+            sizeof(UINT64),
+            &bytesRead);
 
-		// Calculate how many bytes we can read in this page
-		SIZE_T offsetInPage = (UINT64)physAddress & 0xFFF;
-		SIZE_T chunkSize = min(PAGE_SIZE - offsetInPage, remaining);
-		SIZE_T bytesRead = 0;
+        if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pml4e.parts.present)
+        {
+            LOG("PML4 entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
+            return nullptr;
+        }
+    }
 
-		NTSTATUS res = ReadPhysicalMemory(physAddress, userBuffer, chunkSize, &bytesRead);
-		if (!NT_SUCCESS(res) || bytesRead == 0) {
-			LOG("ERROR: ReadPhysicalMemory failed at VA 0x%llX with status 0x%X", currentVA, res);
-			return res;
-		}
+    PTE pdpte{};
+    {
+        NTSTATUS st = ReadPhysicalMemory(
+            reinterpret_cast<PVOID>((pml4e.parts.physBase << 12) + pdptIndex * sizeof(UINT64)),
+            &pdpte,
+            sizeof(UINT64),
+            &bytesRead);
 
-		userBuffer += bytesRead;
-		currentVA += bytesRead;
-		remaining -= bytesRead;
-		totalRead += bytesRead;
-	}
+        if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pdpte.parts.present)
+        {
+            LOG("PDPT entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
+            return nullptr;
+        }
+    }
 
-	buffer->bytesRead = totalRead;
-	return STATUS_SUCCESS;
+    if (pdpte.parts.pageSize)
+    {
+        const auto physBase = pdpte.parts.physBase << 12;
+        const auto bigPageOffset = va.value & (1ull << 30) - 1;
+        return reinterpret_cast<PVOID>(physBase + bigPageOffset);
+    }
+
+    PTE pde{};
+    {
+        NTSTATUS st = ReadPhysicalMemory(
+            reinterpret_cast<PVOID>((pdpte.parts.physBase << 12) + pdIndex * sizeof(UINT64)),
+            &pde,
+            sizeof(UINT64),
+            &bytesRead);
+
+        if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pde.parts.present)
+        {
+            LOG("PD entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
+            return nullptr;
+        }
+    }
+
+    if (pde.parts.pageSize)
+    {
+        const auto physBase = pde.parts.physBase << 12;
+        const auto largePageOffset = va.value & (1ull << 21) - 1;
+        return reinterpret_cast<PVOID>(physBase + largePageOffset);
+    }
+
+    PTE pte{};
+    {
+        NTSTATUS st = ReadPhysicalMemory(
+            reinterpret_cast<PVOID>((pde.parts.physBase << 12) + ptIndex * sizeof(UINT64)),
+            &pte,
+            sizeof(UINT64),
+            &bytesRead);
+
+        if (!NT_SUCCESS(st) || bytesRead != sizeof(UINT64) || !pte.parts.present)
+        {
+            LOG("PT entry not present or read failed (st=0x%X, bytes=%Iu)", st, bytesRead);
+            return nullptr;
+        }
+    }
+
+    const auto phys = (pte.parts.physBase << 12) + pageOffset;
+    return reinterpret_cast<PVOID>(phys);
 }
 
-NTSTATUS Driver::HandleWriteRequest(Info_t* buffer) {
-	if (!buffer) { // Handle null buffer
-		LOG("ERROR: Buffer is NULL in WRITE request");
-		return STATUS_INVALID_PARAMETER;
-	}
+NTSTATUS Driver::ReadPhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesRead)
+{
+    *bytesRead = 0;
 
-	if (!Driver::targetProcess) { // Handle no target process (user needs to call INIT first)
-		LOG("ERROR: No target process attached in WRITE request");
-		return STATUS_INVALID_PARAMETER;
-	}
+    if (size > PAGE_SIZE) return STATUS_BUFFER_TOO_SMALL;
 
-	SIZE_T bytesWritten = 0;
+    UCHAR safeBuffer[PAGE_SIZE];
 
-	VirtualAddress& va = *reinterpret_cast<VirtualAddress*>(&buffer->targetAddress);
-	VOID* physAddress = TranslateVirtualToPhysical(va);
+    MM_COPY_ADDRESS fromAddress;
+    fromAddress.PhysicalAddress.QuadPart = reinterpret_cast<UINT64>(physicalAddress);
 
-	LOG("WRITE VA 0x%llX at PA %p", va.value, physAddress);
+    SIZE_T copied = 0;
+    NTSTATUS status = KFNs::pMmCopyMemory(safeBuffer, fromAddress, size, MM_COPY_MEMORY_PHYSICAL, &copied);
 
-	// Prevent crossing page boundaries (this would cause issues)
-	// TODO: Handle multi-page reads/writes (we just read/write up to the page boundary for now)
-	ULONG64 finalSize = Min(PAGE_SIZE - ((INT64)physAddress & 0xFFF), (LONGLONG)buffer->bytesToRead);
+    if (NT_SUCCESS(status) && copied > 0)
+    {
+        RtlCopyMemory(buffer, safeBuffer, copied);
+        *bytesRead = copied;
+    }
 
-	if (finalSize != buffer->bytesToRead) {
-		LOG("WARNING: Write request crosses page boundary, limiting write size to %llu bytes", finalSize);
-	}
-
-	NTSTATUS res = WritePhysicalMemory(PVOID(physAddress), buffer->bufferAddress, finalSize, &bytesWritten);
-
-	if (!NT_SUCCESS(res)) { // Handle write failure
-		LOG("ERROR: WritePhysicalMemory failed in WRITE request with status 0x%X", res);
-		return res;
-	}
-
-	buffer->bytesRead = bytesWritten;
-	return STATUS_SUCCESS;
+    return status;
 }
 
-NTSTATUS Driver::HandleGetBaseRequest(Info_t* buffer) {
-	if (!buffer) { // Handle null buffer
-		LOG("ERROR: Buffer is NULL in GETBASE request");
-		return STATUS_INVALID_PARAMETER;
-	}
+NTSTATUS Driver::WritePhysicalMemory(PVOID physicalAddress, PVOID buffer, SIZE_T size, PSIZE_T bytesWritten)
+{
+    PHYSICAL_ADDRESS physAddr{};
+    physAddr.QuadPart = reinterpret_cast<UINT64>(physicalAddress);
 
-	if (!Driver::targetProcess) { // Handle no target process (user needs to call INIT first)
-		LOG("ERROR: No target process attached in GETBASE request");
-		return STATUS_INVALID_PARAMETER;
-	}
+    VOID* mappedAddress = KFNs::pMmMapIoSpace(physAddr, size, MmNonCached);
 
-	// EPROCESS+0x2B0 == SectionBaseAddress
-	UINT64 baseAddress = *reinterpret_cast<UINT64*>(
-		reinterpret_cast<UINT64>(Driver::targetProcess) + 0x2B0
-		);
+    if (!mappedAddress)
+    {
+        LOG("ERROR: MmMapIoSpace failed in WRITE request");
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
 
-	buffer->targetAddress = reinterpret_cast<PVOID>(baseAddress);
-	return STATUS_SUCCESS;
+    RtlCopyMemory(mappedAddress, buffer, size);
+
+    KFNs::pMmUnmapIoSpace(mappedAddress, size);
+
+    if (bytesWritten) *bytesWritten = size;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS Driver::HandleReadRequest(Info_t* buffer)
+{
+    if (!buffer)
+    {
+        LOG("ERROR: Buffer is NULL in READ request");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!Driver::targetProcess)
+    {
+        LOG("ERROR: No target process attached in READ request");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    VirtualAddress& va = *reinterpret_cast<VirtualAddress*>(&buffer->targetAddress);
+    SIZE_T remaining = buffer->bytesToRead;
+    SIZE_T totalRead = 0;
+    UINT8* userBuffer = reinterpret_cast<UINT8*>(buffer->bufferAddress);
+    UINT64 currentVA = va.value;
+
+    while (remaining > 0)
+    {
+        VOID* physAddress = TranslateVirtualToPhysical(*reinterpret_cast<VirtualAddress*>(&currentVA));
+        if (!physAddress)
+        {
+            LOG("ERROR: Failed to translate VA 0x%llX", currentVA);
+            break;
+        }
+
+        SIZE_T offsetInPage = (UINT64)physAddress & 0xFFF;
+        SIZE_T chunkSize = min(PAGE_SIZE - offsetInPage, remaining);
+        SIZE_T bytesRead = 0;
+
+        NTSTATUS res = ReadPhysicalMemory(physAddress, userBuffer, chunkSize, &bytesRead);
+        if (!NT_SUCCESS(res) || bytesRead == 0)
+        {
+            LOG("ERROR: ReadPhysicalMemory failed at VA 0x%llX with status 0x%X", currentVA, res);
+            return res;
+        }
+
+        userBuffer += bytesRead;
+        currentVA += bytesRead;
+        remaining -= bytesRead;
+        totalRead += bytesRead;
+    }
+
+    buffer->bytesRead = totalRead;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS Driver::HandleWriteRequest(Info_t* buffer)
+{
+    if (!buffer)
+    {
+        LOG("ERROR: Buffer is NULL in WRITE request");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!Driver::targetProcess)
+    {
+        LOG("ERROR: No target process attached in WRITE request");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    SIZE_T bytesWritten = 0;
+
+    VirtualAddress& va = *reinterpret_cast<VirtualAddress*>(&buffer->targetAddress);
+    VOID* physAddress = TranslateVirtualToPhysical(va);
+
+    LOG("WRITE VA 0x%llX at PA %p", va.value, physAddress);
+
+    ULONG64 finalSize = Min(PAGE_SIZE - ((INT64)physAddress & 0xFFF), static_cast<LONGLONG>(buffer->bytesToRead));
+
+    if (finalSize != buffer->bytesToRead)
+    {
+        LOG("WARNING: Write request crosses page boundary, limiting write size to %llu bytes", finalSize);
+    }
+
+    NTSTATUS res = WritePhysicalMemory(static_cast<PVOID>(physAddress), buffer->bufferAddress, finalSize,
+                                       &bytesWritten);
+
+    if (!NT_SUCCESS(res))
+    {
+        LOG("ERROR: WritePhysicalMemory failed in WRITE request with status 0x%X", res);
+        return res;
+    }
+
+    buffer->bytesRead = bytesWritten;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS Driver::HandleGetBaseRequest(Info_t* buffer)
+{
+    if (!buffer)
+    {
+        LOG("ERROR: Buffer is NULL in GETBASE request");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (!Driver::targetProcess)
+    {
+        LOG("ERROR: No target process attached in GETBASE request");
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    UINT64 baseAddress = *reinterpret_cast<UINT64*>(
+        reinterpret_cast<UINT64>(Driver::targetProcess) + 0x2B0
+    );
+
+    buffer->targetAddress = reinterpret_cast<PVOID>(baseAddress);
+    return STATUS_SUCCESS;
 }
